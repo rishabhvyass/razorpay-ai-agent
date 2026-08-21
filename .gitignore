@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# Secrets. Never commit these.
+#
+# backend/.env holds SUPABASE_SERVICE_ROLE_KEY, which bypasses row-level
+# security entirely. The .env.example files are committed instead - they list
+# every variable with placeholder values, so a fresh clone knows what to set.
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# Claude Code / agent-skills local state
+#
+# settings.local.json is per-machine permissions. .claude/skills/ holds absolute
+# symlinks into this machine's filesystem, so committing them would produce
+# broken links on any other device - recreate them with:
+#   npx skills add supabase/agent-skills
+.claude/settings.local.json
+.claude/skills/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.swp
