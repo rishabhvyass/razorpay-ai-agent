@@ -229,7 +229,7 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Public
     amount = lineTotalMinor(product.price, input.quantity);
   } catch (cause) {
     if (!isValidMinorAmount(product.price)) {
-      throw internal(`Product ${product.id} has an out-of-range price`, { cause });
+      throw internal(`Product ${product.id} has an out-of-range price`, cause);
     }
     throw badRequest('VALIDATION_ERROR', 'Order total is out of the supported range.', {
       quantity: input.quantity,
