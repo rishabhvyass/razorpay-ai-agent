@@ -15,7 +15,7 @@
 
 import { getConversationActivity } from './conversationService';
 import { getOrderActivity } from './orderService';
-import type { ActivityFeed, AgentAction } from '@/types';
+import type { ActivityFeed, AgentAction, Order } from '@/types';
 
 export { getConversationActivity, getOrderActivity };
 
@@ -28,24 +28,36 @@ const EMPTY_SUMMARY: ActivityFeed['summary'] = {
 };
 
 /**
+ * The common ground between the two feed shapes.
+ *
+ * Both routes return `actions`. Only the conversation-scoped one returns `orders`,
+ * so `orders` is optional here rather than pretended into existence - the order-scoped
+ * route already knows which order it is about and does not repeat it.
+ */
+interface FeedLike {
+  actions: AgentAction[];
+  orders?: Order[];
+}
+
+/**
  * Merge several scoped feeds into one chronological trail.
  *
  * De-duplicates by action id, because an action attached to both a conversation
  * and an order appears in both feeds and must not be double-counted in a summary
  * a reviewer is reading as a count of what the agent did.
  */
-export function mergeFeeds(feeds: Array<ActivityFeed | undefined>): ActivityFeed {
+export function mergeFeeds(feeds: Array<FeedLike | undefined>): ActivityFeed {
   const actionsById = new Map<string, AgentAction>();
-  const ordersById = new Map<string, ActivityFeed['orders'][number]>();
+  const ordersById = new Map<string, Order>();
 
   for (const feed of feeds) {
     if (!feed) continue;
-    for (const action of feed.actions ?? []) actionsById.set(action.id, action);
+    for (const action of feed.actions) actionsById.set(action.id, action);
     for (const order of feed.orders ?? []) ordersById.set(order.id, order);
   }
 
   const actions = [...actionsById.values()].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
   const summary = actions.reduce<ActivityFeed['summary']>(

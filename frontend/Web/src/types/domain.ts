@@ -1,11 +1,6 @@
 /**
  * Domain types.
  *
- * These mirror `backend/src/db/types.ts` and the response envelopes the Express
- * routes actually return. They are hand-copied rather than generated because the
- * backend is a separate package - so when the backend changes, this file is the
- * one place that has to change with it.
- *
  * MONEY: every amount is an integer in MINOR UNITS (paise for INR).
  * 149900 = Rs 1,499.00. There is no float anywhere in this file, and nothing in
  * the app divides by 100 except lib/money.ts. Getting this wrong is a silent
@@ -45,8 +40,6 @@ export interface ApiErrorBody {
   };
 }
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
-
 // -----------------------------------------------------------------------------
 // Status unions - mirror the CHECK constraints in
 // backend/supabase/migrations/001_initial_schema.sql
@@ -82,7 +75,26 @@ export const AGENT_ACTION_TYPES = [
 export type AgentActionType = (typeof AGENT_ACTION_TYPES)[number];
 
 // -----------------------------------------------------------------------------
-// Rows
+// Entities, as the backend actually serialises them
+//
+// CRITICAL: these mirror the `Public*` interfaces in backend/src/repositories/,
+// NOT the Postgres row types in backend/src/db/types.ts. The table columns are
+// snake_case; every route serialises through a `toPublic*` function that renames
+// them to camelCase and drops the columns that must not leave the server.
+//
+// Typing against the row shape instead of the wire shape is a defect that renders
+// as a page full of em-dashes rather than as an error, because every renamed field
+// simply arrives `undefined` and every `?? '-'` fallback absorbs it. That is why
+// services/decode.ts checks these shapes at runtime: a mismatch has to be loud,
+// because a UI that quietly reports "no value" for a field the server did send is
+// misrepresenting the server.
+//
+// Source of truth, field for field:
+//   Product      backend/src/repositories/productRepo.ts      -> PublicProduct
+//   Conversation backend/src/repositories/conversationRepo.ts -> PublicConversation
+//   Message      backend/src/repositories/messageRepo.ts      -> PublicMessage
+//   Order        backend/src/repositories/orderRepo.ts        -> PublicOrder
+//   AgentAction  backend/src/repositories/agentActionRepo.ts  -> PublicAgentAction
 // -----------------------------------------------------------------------------
 
 export interface Product {
@@ -94,72 +106,98 @@ export interface Product {
   /** Minor units. 149900 = Rs 1,499.00. */
   price: number;
   currency: string;
+  /** The backend's own formatted string, for display and for the agent to quote. */
+  priceFormatted: string;
   stock: number;
-  image_url: string | null;
-  active: boolean;
-  metadata: Json;
-  created_at: string;
-  updated_at: string;
+  /** Server-derived (`stock > 0`). Not recomputed here - the server decides. */
+  inStock: boolean;
+  imageUrl: string | null;
+  /** Open JSONB bag. Typed `unknown` because the server types it `unknown`. */
+  metadata: unknown;
 }
 
+/**
+ * Note what is absent: `metadata`. The conversations table has the column, but
+ * `toPublicConversation` does not serialise it, so it is not on the wire and
+ * declaring it here would be inventing a field.
+ */
 export interface Conversation {
   id: string;
-  user_id: string | null;
+  userId: string | null;
   status: ConversationStatus;
-  metadata: Json;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Message {
   id: string;
-  conversation_id: string;
+  conversationId: string;
   role: MessageRole;
   content: string;
-  metadata: Json;
-  created_at: string;
+  metadata: unknown;
+  createdAt: string;
 }
 
+/**
+ * An order as the API returns it.
+ *
+ * Two columns exist on the table and are deliberately NOT serialised, so they are
+ * deliberately not declared here either:
+ *
+ *   idempotency_key - a caller-chosen dedup token. Echoing it back would let one
+ *                     client discover another caller's key.
+ *   metadata        - an open JSONB bag the payments layer will fill with provider
+ *                     detail, read through a service-role query. Not safe to expose
+ *                     wholesale.
+ *
+ * `amount` is the authoritative figure, in minor units, computed server-side from
+ * the product row. `amountFormatted` is the server's own rendering of it.
+ */
 export interface Order {
   id: string;
-  user_id: string | null;
-  conversation_id: string | null;
-  product_id: string;
+  userId: string | null;
+  conversationId: string | null;
+  productId: string;
   quantity: number;
   /** Total in minor units, computed server-side. Never client-supplied. */
   amount: number;
   currency: string;
+  /** The trusted backend's own formatted total. */
+  amountFormatted: string;
   status: OrderStatus;
-  razorpay_order_id: string | null;
-  razorpay_payment_link_id: string | null;
-  razorpay_payment_id: string | null;
-  idempotency_key: string | null;
-  metadata: Json;
-  created_at: string;
-  updated_at: string;
+  razorpayOrderId: string | null;
+  razorpayPaymentLinkId: string | null;
+  razorpayPaymentId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AgentAction {
   id: string;
-  conversation_id: string | null;
-  order_id: string | null;
-  tool_name: string;
-  action_type: string;
+  conversationId: string | null;
+  orderId: string | null;
+  toolName: string;
+  actionType: string;
   reason: string | null;
-  input: Json | null;
-  output: Json | null;
+  /** Re-redacted server-side on the way out. Still passed through lib/redact here. */
+  input: unknown;
+  output: unknown;
   status: AgentActionStatus;
-  error_code: string | null;
-  error_message: string | null;
-  request_id: string | null;
-  created_at: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  requestId: string | null;
+  createdAt: string;
 }
 
 // -----------------------------------------------------------------------------
 // Composite payloads
 // -----------------------------------------------------------------------------
 
-/** `GET /api/conversations/:id/activity` -> data */
+/**
+ * `GET /api/conversations/:id/activity` -> data
+ *
+ * The summary is computed by the route (backend/src/api/conversations.ts), not here.
+ */
 export interface ActivityFeed {
   actions: AgentAction[];
   orders: Order[];
@@ -170,6 +208,20 @@ export interface ActivityFeed {
     failed: number;
     blocked: number;
   };
+}
+
+/**
+ * `GET /api/orders/:id/activity` -> data
+ *
+ * A DIFFERENT shape from ActivityFeed: the order-scoped route returns the order's
+ * own id and status alongside the actions, and returns no `orders` array and no
+ * `summary`. Typing it as an ActivityFeed - as this file previously did - meant
+ * every consumer read `.summary.total` off `undefined`.
+ */
+export interface OrderActivityFeed {
+  orderId: string;
+  status: OrderStatus;
+  actions: AgentAction[];
 }
 
 /** `GET /health` */

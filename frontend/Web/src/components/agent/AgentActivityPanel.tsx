@@ -4,7 +4,7 @@ import { useCheckoutSession } from '@/hooks/useCheckoutSession';
 import { useConversationActivity } from '@/hooks/useActivity';
 import { config } from '@/lib/config';
 import { cn } from '@/lib/cn';
-import { MockNotice } from '@/components/ui';
+import { ErrorState, MockNotice } from '@/components/ui';
 import { AgentActivityTimeline } from './AgentActivityTimeline';
 import { AgentStatus, type AgentStatusValue } from './AgentStatus';
 import type { AgentAction } from '@/types';
@@ -42,7 +42,7 @@ export function AgentActivityPanel({
     for (const action of session.localActions) byId.set(action.id, action);
 
     return [...byId.values()].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }, [feed.data?.actions, session.localActions]);
 
@@ -67,7 +67,7 @@ export function AgentActivityPanel({
   const counts = useMemo(
     () => ({
       total: actions.length,
-      money: actions.filter((action) => action.action_type === 'MONEY_ACTION').length,
+      money: actions.filter((action) => action.actionType === 'MONEY_ACTION').length,
       failed: actions.filter((action) => action.status === 'failed' || action.status === 'blocked')
         .length,
     }),
@@ -80,9 +80,14 @@ export function AgentActivityPanel({
     <div className={cn('flex min-h-0 flex-col', className)}>
       {showHeader ? (
         <div className="border-line flex items-center justify-between gap-3 border-b px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <ScrollText className="text-faint size-4 shrink-0" aria-hidden />
-            <h2 className="text-ink text-[13px] font-semibold">Agent activity</h2>
+            <div className="min-w-0">
+              <h2 className="text-ink text-[13px] leading-tight font-semibold">Agent Activity</h2>
+              <p className="text-faint mt-0.5 truncate text-[11px] leading-tight">
+                Transparent execution trace
+              </p>
+            </div>
           </div>
           <AgentStatus status={status} />
         </div>
@@ -116,6 +121,25 @@ export function AgentActivityPanel({
             on the backend, so the agent's tool calls are simulated and are not written to the{' '}
             <code>agent_actions</code> table. Order creation is real.
           </MockNotice>
+        ) : null}
+
+        {/* The backend feed failing is not the same as there being no activity, and
+            it must not blank the local entries: passing `error` straight through to
+            the timeline would have replaced the whole list, including actions this
+            browser produced and holds. So the failure is a banner over the list, and
+            it says the trail is incomplete rather than letting a short list pass for
+            a complete one. */}
+        {feed.isError ? (
+          <div className="mb-4 space-y-2">
+            <ErrorState error={feed.error} onRetry={() => void feed.refetch()} compact />
+            {actions.length > 0 ? (
+              <p className="text-faint text-[11px] leading-relaxed">
+                The entries below are the ones already in hand. Because that read failed, this
+                trail may be missing actions the backend has recorded — treat it as incomplete
+                until the retry succeeds.
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         {!session.transcriptRecording && session.turns.length > 0 ? (

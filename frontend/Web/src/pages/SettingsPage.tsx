@@ -69,8 +69,18 @@ export function SettingsPage() {
   const draftInvalid = trimmedDraft !== '' && !UUID.test(trimmedDraft);
   const draftChanged = trimmedDraft !== (savedUserId ?? '');
 
+  // Why Save is unavailable, or null when it is available. The button is
+  // aria-disabled rather than disabled so this explanation is reachable: a disabled
+  // button is removed from the tab order, so a screen reader user never lands on it
+  // and never hears that a malformed id is what stopped it from responding.
+  const saveBlockedReason = draftInvalid
+    ? 'Save is unavailable because the user id is not a UUID.'
+    : !draftChanged
+      ? 'Save is unavailable because the user id has not changed.'
+      : null;
+
   const saveUserId = () => {
-    if (draftInvalid) return;
+    if (draftInvalid || !draftChanged) return;
     setUserId(trimmedDraft === '' ? null : trimmedDraft);
     setSavedUserId(trimmedDraft === '' ? null : trimmedDraft);
     setJustSaved(true);
@@ -294,7 +304,8 @@ export function SettingsPage() {
                   variant="primary"
                   size="sm"
                   onClick={saveUserId}
-                  disabled={draftInvalid || !draftChanged}
+                  aria-disabled={saveBlockedReason !== null || undefined}
+                  aria-describedby={saveBlockedReason ? 'settings-save-reason' : undefined}
                   icon={justSaved ? <Check className="size-3.5" aria-hidden /> : undefined}
                 >
                   {justSaved ? 'Saved' : 'Save'}
@@ -323,6 +334,19 @@ export function SettingsPage() {
                   )}
                 </span>
               </div>
+
+              {/* The button's own description, and a polite live region so the reason
+                  is spoken when it changes rather than only when the button is read. */}
+              {saveBlockedReason ? (
+                <p
+                  id="settings-save-reason"
+                  role="status"
+                  aria-live="polite"
+                  className="text-faint text-[12px]"
+                >
+                  {saveBlockedReason}
+                </p>
+              ) : null}
             </div>
           </Card>
         </Section>

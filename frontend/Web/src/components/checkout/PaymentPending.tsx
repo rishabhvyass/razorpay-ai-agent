@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { ExternalLink, Hourglass, Info, Loader2 } from 'lucide-react';
-import { Badge, Button, MockNotice } from '@/components/ui';
+import { Badge, Button, ErrorState, MockNotice } from '@/components/ui';
+import { AGENT_PHASE_LABEL } from '@/hooks/useCheckoutSession';
+import { PaymentSteps } from './PaymentSteps';
 import { formatMinor } from '@/lib/money';
 import type { Order } from '@/types';
 
@@ -20,12 +22,17 @@ export function PaymentPending({
   paymentUrl,
   isMock,
   onSimulate,
+  simulateError,
+  simulating = false,
 }: {
   order: Order;
   paymentUrl: string | null;
   isMock: boolean;
   /** Mock only. Provided so a reviewer can reach both outcomes deliberately. */
   onSimulate?: (outcome: 'success' | 'failure') => void;
+  /** A settlement attempt that failed. Surfaced rather than swallowed. */
+  simulateError?: unknown;
+  simulating?: boolean;
 }) {
   // A leading slash means the link is this app's simulated checkout route. Anything
   // else is a provider-issued URL and must open in its own tab.
@@ -43,10 +50,19 @@ export function PaymentPending({
         </span>
       </div>
 
+      <PaymentSteps order={order} paymentUrl={paymentUrl} />
+
+      <p className="text-ink text-[13px] font-medium">Complete the payment to continue.</p>
+
+      {/* Two different sentences, because "a link has been issued" was previously
+          asserted even when `paymentUrl` was null - the interface claiming a payment
+          link existed while the block below it said none did. */}
       <p className="text-muted text-[13px] leading-relaxed">
-        A payment link for {formatMinor(order.amount, order.currency)} has been issued. This page is
-        polling the backend and will update on its own — it will only report success once Razorpay
-        confirms the payment with a verified webhook.
+        {paymentUrl
+          ? `A payment link for ${formatMinor(order.amount, order.currency)} has been issued.`
+          : `No payment link has been issued for the ${formatMinor(order.amount, order.currency)} due.`}{' '}
+        This page is polling the backend and will update on its own — it will only report success
+        once Razorpay confirms the payment with a verified webhook.
       </p>
 
       {paymentUrl ? (
@@ -92,6 +108,7 @@ export function PaymentPending({
               variant="success"
               size="sm"
               onClick={() => onSimulate('success')}
+              loading={simulating}
               className="flex-1"
             >
               Simulate verified payment
@@ -100,11 +117,25 @@ export function PaymentPending({
               variant="secondary"
               size="sm"
               onClick={() => onSimulate('failure')}
+              disabled={simulating}
               className="flex-1"
             >
               Simulate failure
             </Button>
           </div>
+          {/* Named work rather than a bare disabled state, and the same string the
+              chat surface uses for this phase, so the two cannot drift. It is only
+              rendered while the settlement call is actually awaiting - spec section
+              33's labels describe requests in flight, not a spinner on a timer. */}
+          {simulating ? (
+            <p className="text-muted text-[12px]" role="status" aria-live="polite">
+              {AGENT_PHASE_LABEL['verifying-payment']} — waiting for the simulated provider to
+              settle this order.
+            </p>
+          ) : null}
+          {/* A settlement can legitimately fail - no overlay exists for this order
+              id in this browser. Swallowing it left the buttons looking inert. */}
+          {simulateError ? <ErrorState error={simulateError} compact /> : null}
         </div>
       ) : null}
     </div>

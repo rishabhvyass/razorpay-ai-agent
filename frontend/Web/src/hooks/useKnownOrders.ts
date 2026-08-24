@@ -61,7 +61,7 @@ export function useKnownOrders() {
     }
 
     return [...byId.values()].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
     // localRevision above stands in for the localOrders array the body reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps

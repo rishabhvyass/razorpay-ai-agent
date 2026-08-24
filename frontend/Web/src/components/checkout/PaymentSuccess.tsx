@@ -29,12 +29,16 @@ export function PaymentSuccess({
           <BadgeCheck className="text-success size-4" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="text-ink text-sm font-semibold">Payment verified</p>
+          <p className="text-ink text-sm font-semibold">Payment confirmed</p>
           <p className="text-muted text-[12px]">
-            {formatMinor(order.amount, order.currency)} confirmed
+            {formatMinor(order.amount, order.currency)} · order {truncateId(order.id, 8, 4)}
           </p>
         </div>
       </div>
+
+      <p className="text-muted text-[13px] leading-relaxed">
+        Your payment has been verified and your order is confirmed.
+      </p>
 
       <div className="rounded-control border-success-line bg-success-bg flex items-start gap-2.5 border px-3 py-2.5">
         <ShieldCheck className="text-success mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -62,7 +66,7 @@ export function PaymentSuccess({
         </Link>
         <Link to="/products" className="sm:flex-1">
           <Button variant="ghost" size="md" fullWidth>
-            Keep shopping
+            Continue shopping
           </Button>
         </Link>
       </div>

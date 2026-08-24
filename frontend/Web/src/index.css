@@ -21,10 +21,17 @@
   --color-surface-subtle: #fbfcfd;
   --color-surface-sunken: #f2f4f7;
 
-  /* Text */
+  /* Text - all three levels carry information (column headers, the provenance
+     line under a metric, every timestamp), so all three clear AA at 4.5:1
+     against the worst surface they land on, which is surface-sunken rather than
+     white. `faint` was 2.39:1 there - the line saying where a dashboard figure
+     came from was the least readable text on the page. Darkening `faint` alone
+     would have parked it on top of `muted`, so the whole ramp steps down and
+     keeps its spacing: 5.9 / 36.0 / 45.7 in CIE L*, a ~10-point gap per level.
+     Ratios below are vs surface / surface-subtle / surface-sunken. */
   --color-ink: #111318;
-  --color-muted: #68707d;
-  --color-faint: #98a0ac;
+  --color-muted: #4f555f; /* 7.51 / 7.31 / 6.81 - was #68707d at 5.00 / 4.86 / 4.54 */
+  --color-faint: #646d7b; /* 5.23 / 5.09 / 4.75 - was #98a0ac at 2.64 / 2.57 / 2.39 */
 
   /* Lines */
   --color-line: #e5e7eb;
@@ -40,25 +47,37 @@
   --color-accent-700: #4338ca;
   --color-accent-900: #312e81;
 
-  /* Status */
-  --color-success: #16a34a;
+  /* Status. The foreground of each pair is what Badge.tsx sets on the matching
+     `-bg` tint at 11px/500, and on /orders that label is the only per-row
+     carrier of state: at 3.07:1 against 3.15:1, "Payment pending" and "Paid"
+     were not separable, so the never-colour-alone rule above (WCAG 1.4.1) held
+     while the contrast rule (1.4.3) did not. Each foreground therefore drops one
+     step darker on its own ramp. The tints stay put because they double as
+     surface fills (ui/Card.tsx) and lightening them would wash those out. The
+     ratio noted is the foreground on its own `-bg`; the same change repairs the
+     solid fills, where `bg-success text-white` in PaymentSteps was 3.30:1 and is
+     now 5.02:1. */
+  --color-success: #15803d; /* 4.79:1 - was #16a34a at 3.15:1 */
   --color-success-bg: #f0fdf4;
   --color-success-line: #bbf7d0;
 
-  --color-warning: #d97706;
+  --color-warning: #b45309; /* 4.84:1 - was #d97706 at 3.07:1 */
   --color-warning-bg: #fffbeb;
   --color-warning-line: #fde68a;
 
-  --color-danger: #dc2626;
+  --color-danger: #b91c1c; /* 5.91:1 - was #dc2626 at 4.41:1 */
   --color-danger-bg: #fef2f2;
   --color-danger-line: #fecaca;
 
-  --color-info: #0284c7;
+  --color-info: #0369a1; /* 5.57:1 - was #0284c7 at 3.84:1 */
   --color-info-bg: #f0f9ff;
   --color-info-line: #bae6fd;
 
-  /* Razorpay brand - used only in payment / test-mode context, never as chrome */
-  --color-razorpay: #3395ff;
+  /* Razorpay brand - used only in payment / test-mode context, never as chrome.
+     There is no ramp to step down, and Badge.tsx pairs it with info-bg where the
+     brand value missed even the 3:1 non-text floor, so the hue and saturation are
+     held exactly and only lightness moves: hsl(211 100% 60%) -> hsl(211 100% 42%). */
+  --color-razorpay: #0068d6; /* 4.99:1 on info-bg - was #3395ff at 2.86:1 */
 
   /* Type */
   --font-sans:

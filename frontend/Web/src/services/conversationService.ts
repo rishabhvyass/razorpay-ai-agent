@@ -19,21 +19,27 @@
  */
 
 import { request } from './api';
+import {
+  decodeActivityFeed,
+  decodeConversation,
+  decodeMessage,
+  decodeMessages,
+} from './decode';
 import type { ActivityFeed, Conversation, ConversationStatus, Message } from '@/types';
 
 export function createConversation(
   userId?: string | null,
   signal?: AbortSignal,
 ): Promise<Conversation> {
-  return request<Conversation>('/api/conversations', {
+  return request<unknown>('/api/conversations', {
     method: 'POST',
     body: userId ? { userId } : {},
     signal,
-  });
+  }).then(decodeConversation);
 }
 
 export function getConversation(id: string, signal?: AbortSignal): Promise<Conversation> {
-  return request<Conversation>(`/api/conversations/${id}`, { signal });
+  return request<unknown>(`/api/conversations/${id}`, { signal }).then(decodeConversation);
 }
 
 export function setConversationStatus(
@@ -41,11 +47,11 @@ export function setConversationStatus(
   status: ConversationStatus,
   signal?: AbortSignal,
 ): Promise<Conversation> {
-  return request<Conversation>(`/api/conversations/${id}`, {
+  return request<unknown>(`/api/conversations/${id}`, {
     method: 'PATCH',
     body: { status },
     signal,
-  });
+  }).then(decodeConversation);
 }
 
 export function getMessages(
@@ -53,10 +59,10 @@ export function getMessages(
   params: { limit?: number; offset?: number } = {},
   signal?: AbortSignal,
 ): Promise<Message[]> {
-  return request<Message[]>(`/api/conversations/${id}/messages`, {
+  return request<unknown>(`/api/conversations/${id}/messages`, {
     query: { limit: params.limit, offset: params.offset },
     signal,
-  });
+  }).then(decodeMessages);
 }
 
 /** Append the user's turn. Role is fixed to 'user' by the backend schema. */
@@ -65,11 +71,11 @@ export function appendUserMessage(
   content: string,
   signal?: AbortSignal,
 ): Promise<Message> {
-  return request<Message>(`/api/conversations/${id}/messages`, {
+  return request<unknown>(`/api/conversations/${id}/messages`, {
     method: 'POST',
     body: { content, role: 'user' },
     signal,
-  });
+  }).then(decodeMessage);
 }
 
 export function getConversationActivity(
@@ -77,8 +83,8 @@ export function getConversationActivity(
   params: { limit?: number; offset?: number } = {},
   signal?: AbortSignal,
 ): Promise<ActivityFeed> {
-  return request<ActivityFeed>(`/api/conversations/${id}/activity`, {
+  return request<unknown>(`/api/conversations/${id}/activity`, {
     query: { limit: params.limit, offset: params.offset },
     signal,
-  });
+  }).then(decodeActivityFeed);
 }

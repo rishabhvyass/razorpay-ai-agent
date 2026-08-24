@@ -18,7 +18,7 @@ const MAX_LENGTH = 500;
 export function MessageInput({
   onSend,
   disabled = false,
-  placeholder = 'Describe what you are looking for…',
+  placeholder = 'Ask your AI shopping assistant...',
   autoFocus = false,
 }: {
   onSend: (message: string) => void;

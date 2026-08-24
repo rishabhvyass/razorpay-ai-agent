@@ -59,6 +59,32 @@ import type { AgentAction, ChatTurn, Product } from '@/types';
 /** Where a confirmation card is in its lifecycle. Absent = still awaiting a decision. */
 export type ConfirmationState = 'confirming' | 'confirmed' | 'declined' | 'failed';
 
+/**
+ * What the app is actually doing right now, for the loading copy in spec section 33.
+ *
+ * Each value is set immediately before the await that performs that work and cleared
+ * when it settles, so the label always names a request that is genuinely in flight.
+ * None of them is driven by a timer or a scripted sequence - a progress message that
+ * advances on a clock is telling the user about a process it is not watching, and on
+ * a payment surface that is the same class of claim as a premature "successful".
+ */
+export type AgentPhase =
+  | 'thinking'
+  | 'searching-catalogue'
+  | 'creating-order'
+  | 'generating-link'
+  | 'verifying-payment';
+
+export const AGENT_PHASE_LABEL: Record<AgentPhase, string> = {
+  thinking: 'Thinking',
+  // Spec section 33 writes this "Searching catalog". Spelled the way every other
+  // user-facing string in this app spells it, so one label does not read as a typo.
+  'searching-catalogue': 'Searching the catalogue',
+  'creating-order': 'Creating secure order',
+  'generating-link': 'Generating payment link',
+  'verifying-payment': 'Verifying payment',
+};
+
 export interface CheckoutSessionValue {
   /** Real conversation id from `POST /api/conversations`, or null if it failed. */
   conversationId: string | null;
@@ -75,6 +101,8 @@ export interface CheckoutSessionValue {
 
   isThinking: boolean;
   isConfirming: boolean;
+  /** The work in flight, or null when nothing is. See AgentPhase. */
+  phase: AgentPhase | null;
   sendError: unknown;
 
   send: (message: string) => void;
@@ -120,6 +148,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
     getStoredConversationId(),
   );
   const [transcriptRecording, setTranscriptRecording] = useState(true);
+  const [phase, setPhase] = useState<AgentPhase | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [localActions, setLocalActions] = useState<AgentAction[]>([]);
   const [standingProduct, setStandingProduct] = useState<Product | null>(null);
@@ -232,6 +261,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         conversationId: id ?? 'local',
         message,
         standingProduct,
+        onPhase: setPhase,
       });
     },
     onSuccess: (response) => {
@@ -263,6 +293,10 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         },
       ]);
     },
+    // onSettled, not onSuccess: a failed turn is just as finished as a successful
+    // one, and a label left saying "Searching the catalogue" after the search threw
+    // would be describing work that had stopped.
+    onSettled: () => setPhase(null),
   });
 
   const send = useCallback(
@@ -280,6 +314,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (!transcriptRecording) warnTranscript();
+      setPhase('thinking');
       sendMutation.mutate(trimmed);
     },
     [appendTurns, sendMutation, transcriptRecording, warnTranscript],
@@ -298,6 +333,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
 
       // REAL endpoint. Writes PENDING_CONFIRMATION, moves no money, and computes
       // the amount server-side from the product row.
+      setPhase('creating-order');
       const order = await createOrder({
         productId: args.product.id,
         quantity: args.quantity,
@@ -313,21 +349,40 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       // call, so the payment card renders the pending-implementation state instead
       // of a fabricated link.
       let paymentUrl: string | null = null;
-      let razorpayOrderId: string | null = order.razorpay_order_id;
-      let paymentLinkId: string | null = order.razorpay_payment_link_id;
+      let razorpayOrderId: string | null = order.razorpayOrderId;
+      let paymentLinkId: string | null = order.razorpayPaymentLinkId;
+      let paymentLinkError: string | null = null;
 
       if (config.useMock) {
-        const view = await requestPaymentLink(order.id);
-        paymentUrl = view.paymentUrl;
-        razorpayOrderId = view.razorpayOrderId;
-        paymentLinkId = view.paymentLinkId;
+        try {
+          setPhase('generating-link');
+          const view = await requestPaymentLink(order.id);
+          paymentUrl = view.paymentUrl;
+          razorpayOrderId = view.razorpayOrderId;
+          paymentLinkId = view.paymentLinkId;
+        } catch (error) {
+          // The order above is real and already recorded in Postgres. Letting this
+          // reject would route to onError, which tells the user the order was not
+          // created - false, and an invitation to submit a second one. An order
+          // with no payment link is a real, displayable state: it is exactly what
+          // real mode shows, so it is reported as that rather than as a failure.
+          paymentLinkError = errorMessage(error);
+        }
       }
 
-      return { order, product: args.product, paymentUrl, razorpayOrderId, paymentLinkId };
+      return {
+        order,
+        product: args.product,
+        paymentUrl,
+        razorpayOrderId,
+        paymentLinkId,
+        paymentLinkError,
+      };
     },
     onMutate: (args) => {
       setConfirmations((current) => ({ ...current, [args.turnId]: 'confirming' }));
     },
+    onSettled: () => setPhase(null),
     onSuccess: (result, args) => {
       setConfirmations((current) => ({ ...current, [args.turnId]: 'confirmed' }));
       setActiveOrderId(result.order.id);
@@ -336,9 +391,11 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         {
           id: localId('turn'),
           role: 'assistant',
-          content: config.useMock
-            ? 'Order recorded and a payment link issued. Complete the payment to continue - I will only report success once the payment is verified.'
-            : 'Order recorded. The payment step is not wired up on the backend yet, so no payment link was created.',
+          content: !config.useMock
+            ? 'Order recorded. The payment step is not wired up on the backend yet, so no payment link was created.'
+            : result.paymentLinkError !== null
+              ? 'The order is recorded, but no payment link could be issued for it. Nothing has been charged.'
+              : 'Order recorded and a payment link issued. Complete the payment to continue - I will only report success once the payment is verified.',
           createdAt: new Date().toISOString(),
           mock: config.useMock,
           blocks: [
@@ -354,12 +411,15 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (config.useMock) {
+        // `paymentLinkId` is passed through as null when no link was issued, so the
+        // trail records that step as failed instead of claiming a link that does not
+        // exist. A stand-in string like 'not issued' would have read as a success.
         appendActions(
           mockApprovalActions({
             productName: result.product.name,
             orderId: result.order.id,
-            razorpayOrderId: result.razorpayOrderId ?? 'not issued',
-            paymentLinkId: result.paymentLinkId ?? 'not issued',
+            razorpayOrderId: result.razorpayOrderId,
+            paymentLinkId: result.paymentLinkId,
           }),
         );
       }
@@ -423,13 +483,39 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
 
   const simulate = useCallback(
     async (orderId: string, outcome: 'success' | 'failure') => {
-      const view = await simulateSettlement(orderId, outcome);
-      appendActions(mockSettlementActions({ outcome, paymentId: view.paymentId }));
+      // Cleared in a `finally`, not after the await: settlement now throws when no
+      // payment was ever initiated for this order, and an early return would leave
+      // "Verifying payment" on screen for a verification that had already stopped.
+      setPhase('verifying-payment');
 
-      await queryClient.invalidateQueries({ queryKey: qk.orders.payment(orderId) });
-      await queryClient.invalidateQueries({ queryKey: qk.orders.detail(orderId) });
-      if (conversationId) {
-        void queryClient.invalidateQueries({ queryKey: qk.conversations.activity(conversationId) });
+      try {
+        const view = await simulateSettlement(orderId, outcome);
+
+        // Derived from the settled row, never from which button was pressed. Passing
+        // `outcome` straight through meant that when settlement silently did not take
+        // effect, the trail still recorded 'payment_verified' and 'order_completed ->
+        // PAID' - the interface asserting a verified webhook it had never observed.
+        // The row reading PAID is the only thing that entitles it to claim verification.
+        if (view.order.status === 'PAID') {
+          appendActions(mockSettlementActions({ outcome: 'success', paymentId: view.paymentId }));
+        } else if (
+          view.order.status === 'PAYMENT_FAILED' ||
+          view.order.status === 'PAYMENT_EXPIRED'
+        ) {
+          appendActions(mockSettlementActions({ outcome: 'failure', paymentId: null }));
+        }
+        // Any other status means the settlement did not land. Nothing is recorded, and
+        // the invalidations below let the UI show whatever the row actually says.
+
+        await queryClient.invalidateQueries({ queryKey: qk.orders.payment(orderId) });
+        await queryClient.invalidateQueries({ queryKey: qk.orders.detail(orderId) });
+        if (conversationId) {
+          void queryClient.invalidateQueries({
+            queryKey: qk.conversations.activity(conversationId),
+          });
+        }
+      } finally {
+        setPhase(null);
       }
     },
     [appendActions, conversationId, queryClient],
@@ -460,6 +546,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       confirmations,
       isThinking: sendMutation.isPending,
       isConfirming: confirmMutation.isPending,
+      phase,
       sendError: sendMutation.error,
       send,
       confirmPurchase,
@@ -475,6 +562,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       conversationId,
       declinePurchase,
       localActions,
+      phase,
       reset,
       send,
       sendMutation.error,

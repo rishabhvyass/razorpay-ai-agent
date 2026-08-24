@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -46,9 +46,22 @@ export function MockCheckoutPage() {
 
   const [settling, setSettling] = useState<'success' | 'failure' | null>(null);
   const [settleError, setSettleError] = useState<unknown>(null);
+  // Set only when a press on THIS page produced the outcome. The settled panel also
+  // renders on a plain visit to an already-settled order, and yanking focus then
+  // would be moving the keyboard for a change the user did not just make.
+  const [settledHere, setSettledHere] = useState(false);
+  const outcomeRef = useRef<HTMLDivElement | null>(null);
 
   const order = payment.data?.order;
   const settled = order ? isTerminalStatus(order.status) : false;
+
+  // The buttons that had focus are unmounted the moment the outcome lands, which
+  // dropped focus to the document body - the one user who most needs to know what
+  // just happened was left with no position on the page. Focus moves to the panel
+  // that replaced them; `role="status"` on it announces the change either way.
+  useEffect(() => {
+    if (settled && settledHere) outcomeRef.current?.focus();
+  }, [settled, settledHere]);
 
   const settle = async (outcome: 'success' | 'failure') => {
     if (!orderId || settling) return;
@@ -56,6 +69,7 @@ export function MockCheckoutPage() {
     setSettleError(null);
     try {
       await session.simulate(orderId, outcome);
+      setSettledHere(true);
     } catch (error) {
       setSettleError(error);
     } finally {
@@ -181,10 +195,20 @@ export function MockCheckoutPage() {
                   </div>
                 </dl>
 
+                {/* The error is a banner ABOVE the controls, not a replacement for
+                    them. Rendering it instead of the buttons removed the only way to
+                    try again, so a failed settle became a dead end on a page whose
+                    entire purpose is reaching an outcome. */}
                 {settleError ? (
                   <ErrorState error={settleError} compact />
-                ) : settled ? (
+                ) : null}
+
+                {settled ? (
                   <div
+                    ref={outcomeRef}
+                    tabIndex={-1}
+                    role="status"
+                    aria-live="polite"
                     className={
                       order.status === 'PAID'
                         ? 'rounded-control border-success-line bg-success-bg flex items-start gap-2.5 border px-3.5 py-3'

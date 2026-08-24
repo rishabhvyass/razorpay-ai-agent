@@ -45,7 +45,7 @@ export function ProductsPage() {
   return (
     <Page
       title="Products"
-      description="The live catalogue — the same data the agent searches"
+      description="Structured catalog available to the AI commerce agent."
       actions={
         <Button
           size="sm"

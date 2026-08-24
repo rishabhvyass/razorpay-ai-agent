@@ -135,38 +135,43 @@ export function DashboardPage() {
               source={scopeNote}
               icon={<ReceiptText className="size-4" aria-hidden />}
               isPending={isPending}
+              error={error}
             />
             <MetricCard
-              label="Verified revenue"
+              label="Revenue"
               value={formatMinor(stats.revenueMinor, stats.currency)}
-              source="Sum of order.amount for PAID orders only. Pending orders are excluded."
+              source="Sum of order.amount for verified (PAID) orders only. Pending orders are excluded — that money is not the merchant's yet."
               icon={<IndianRupee className="size-4" aria-hidden />}
               tone="success"
               isPending={isPending}
+              error={error}
             />
             <MetricCard
-              label="Payments verified"
+              label="Successful payments"
               value={stats.paidCount}
               source="Orders at status PAID, set by the webhook handler after signature verification."
               icon={<BadgeCheck className="size-4" aria-hidden />}
               tone="success"
               isPending={isPending}
+              error={error}
             />
             <MetricCard
-              label="Payments failed"
+              label="Failed payments"
               value={stats.failedCount}
               source="Orders at PAYMENT_FAILED or PAYMENT_EXPIRED. Nothing was charged in either case."
               icon={<CircleSlash className="size-4" aria-hidden />}
               tone={stats.failedCount > 0 ? 'danger' : 'default'}
               isPending={isPending}
+              error={error}
             />
             <MetricCard
-              label="Authorisation → paid"
+              label="Conversion rate"
               value={stats.conversion === null ? '—' : `${stats.conversion}%`}
-              source="Verified payments as a share of authorised orders."
+              source="Verified payments as a share of authorised orders. Conversations that never reached an order cannot be counted, so this is authorisation-to-paid."
               icon={<Activity className="size-4" aria-hidden />}
               tone="accent"
               isPending={isPending}
+              error={error}
               unavailable={stats.conversion === null}
             />
             <MetricCard
@@ -179,6 +184,10 @@ export function DashboardPage() {
               }
               icon={<Activity className="size-4" aria-hidden />}
               isPending={Boolean(session.conversationId) && activity.isPending}
+              // Its own query, not the orders one. A failed activity read was
+              // rendering as "0 agent actions" - the audit-trail total is the last
+              // figure on this page that should be allowed to fail silently.
+              error={activity.error}
               unavailable={!session.conversationId}
             />
           </div>
@@ -229,7 +238,7 @@ export function DashboardPage() {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    productName={namesById.get(order.product_id) ?? null}
+                    productName={namesById.get(order.productId) ?? null}
                   />
                 ))}
               </div>
@@ -244,7 +253,12 @@ export function DashboardPage() {
           <div className="space-y-5">
             <Section title="Funnel" description="Derived from order status, not modelled">
               <Card>
-                <ConversionFunnel orders={orders} />
+                <ConversionFunnel
+                  orders={orders}
+                  isPending={isPending}
+                  error={error}
+                  onRetry={refetch}
+                />
               </Card>
             </Section>
 
@@ -254,7 +268,9 @@ export function DashboardPage() {
                 description={
                   catalogue.isError
                     ? 'The catalogue could not be read. Product surfaces will show an error state until the backend responds.'
-                    : `${catalogue.data?.meta.count ?? 0} products available to the agent.`
+                    : catalogue.isPending
+                      ? 'Reading the catalogue…'
+                      : `${catalogue.data?.meta.count ?? 0} products available to the agent.`
                 }
                 icon={<Package className="size-4" aria-hidden />}
               />

@@ -30,11 +30,11 @@ export function ActivityPage() {
 
   /** Filter options come from the data, so no tool name is hardcoded here. */
   const tools = useMemo(
-    () => [...new Set(feed.actions.map((action) => action.tool_name))].sort(),
+    () => [...new Set(feed.actions.map((action) => action.toolName))].sort(),
     [feed.actions],
   );
   const orderIds = useMemo(
-    () => [...new Set(feed.actions.map((action) => action.order_id).filter(Boolean))] as string[],
+    () => [...new Set(feed.actions.map((action) => action.orderId).filter(Boolean))] as string[],
     [feed.actions],
   );
 
@@ -43,14 +43,14 @@ export function ActivityPage() {
 
     return feed.actions.filter((action) => {
       if (status !== 'all' && action.status !== status) return false;
-      if (tool && action.tool_name !== tool) return false;
-      if (orderId && action.order_id !== orderId) return false;
+      if (tool && action.toolName !== tool) return false;
+      if (orderId && action.orderId !== orderId) return false;
       if (!needle) return true;
 
       return (
-        action.tool_name.toLowerCase().includes(needle) ||
+        action.toolName.toLowerCase().includes(needle) ||
         (action.reason ?? '').toLowerCase().includes(needle) ||
-        (action.error_message ?? '').toLowerCase().includes(needle)
+        (action.errorMessage ?? '').toLowerCase().includes(needle)
       );
     });
   }, [debouncedQuery, feed.actions, orderId, status, tool]);
@@ -93,6 +93,14 @@ export function ActivityPage() {
               {sources.scope.kind === 'user' ? ' for the configured user' : ' created here'}. Actions
               from other users' conversations are not visible.
             </p>
+            {sources.unreadableOrderCount > 0 ? (
+              <p className="text-danger mt-1.5">
+                {sources.unreadableOrderCount} of those order scopes could not be read, so this
+                trail is incomplete — actions recorded against{' '}
+                {sources.unreadableOrderCount === 1 ? 'that order' : 'those orders'} are missing
+                from the list and from the counts below.
+              </p>
+            ) : null}
           </div>
         </div>
 

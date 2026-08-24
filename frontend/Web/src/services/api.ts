@@ -23,6 +23,14 @@ export class ApiError extends Error {
   readonly status: number;
   readonly requestId: string | null;
   readonly details: Record<string, unknown> | undefined;
+  /**
+   * Set only when the thrower knows something the status code cannot express.
+   * A response-shape mismatch is the case in point: it can arrive on a perfectly
+   * healthy HTTP 200, yet retrying is futile because the same request returns the
+   * same unrecognised shape. Offering a "Try again" there wastes the user's time
+   * and hides a bug behind what looks like a flaky network.
+   */
+  private readonly retryableOverride: boolean | undefined;
 
   constructor(init: {
     code: string;
@@ -30,6 +38,8 @@ export class ApiError extends Error {
     status: number;
     requestId?: string | null;
     details?: Record<string, unknown>;
+    /** Overrides the status-based guess in `isRetryable`. */
+    retryable?: boolean;
   }) {
     super(init.message);
     this.name = 'ApiError';
@@ -37,10 +47,12 @@ export class ApiError extends Error {
     this.status = init.status;
     this.requestId = init.requestId ?? null;
     this.details = init.details;
+    this.retryableOverride = init.retryable;
   }
 
   /** True when retrying could plausibly succeed - drives "Try again" buttons. */
   get isRetryable(): boolean {
+    if (this.retryableOverride !== undefined) return this.retryableOverride;
     return this.status === 0 || this.status === 408 || this.status === 429 || this.status >= 500;
   }
 

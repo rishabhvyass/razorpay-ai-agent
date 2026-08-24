@@ -49,9 +49,9 @@ export function OrderTable({
               </td>
               <td className="max-w-[16rem] px-4 py-3">
                 <span className="text-ink block truncate text-[13px] font-medium">
-                  {productName(order.product_id) ?? (
+                  {productName(order.productId) ?? (
                     <span className="text-faint font-mono text-[12px]">
-                      {truncateId(order.product_id, 8, 4)}
+                      {truncateId(order.productId, 8, 4)}
                     </span>
                   )}
                 </span>
@@ -70,7 +70,7 @@ export function OrderTable({
               </td>
               <td className="px-4 py-3">
                 <span className="text-muted nums text-[12px]">
-                  {formatDateTime(order.created_at)}
+                  {formatDateTime(order.createdAt)}
                 </span>
               </td>
               <td className="px-4 py-3 text-right">

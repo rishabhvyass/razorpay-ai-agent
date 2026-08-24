@@ -50,9 +50,9 @@ export async function getPaymentView(orderId: string, signal?: AbortSignal): Pro
     return {
       order,
       paymentUrl: null, // supplied by the payments layer once it exists
-      razorpayOrderId: order.razorpay_order_id,
-      paymentLinkId: order.razorpay_payment_link_id,
-      paymentId: order.razorpay_payment_id,
+      razorpayOrderId: order.razorpayOrderId,
+      paymentLinkId: order.razorpayPaymentLinkId,
+      paymentId: order.razorpayPaymentId,
       failureReason: null,
       mock: false,
     };
@@ -66,9 +66,9 @@ export async function getPaymentView(orderId: string, signal?: AbortSignal): Pro
     return {
       order,
       paymentUrl: null,
-      razorpayOrderId: order.razorpay_order_id,
-      paymentLinkId: order.razorpay_payment_link_id,
-      paymentId: order.razorpay_payment_id,
+      razorpayOrderId: order.razorpayOrderId,
+      paymentLinkId: order.razorpayPaymentLinkId,
+      paymentId: order.razorpayPaymentId,
       failureReason: null,
       mock: false,
     };
@@ -121,6 +121,22 @@ export async function simulateSettlement(
     throw new Error('Settlement simulation is available in mock mode only.');
   }
 
-  settleMockPayment(orderId, outcome);
+  // settleMockPayment answers `undefined` when no overlay exists for this id -
+  // nothing ever requested a payment link, so there is no payment to settle.
+  // Discarding that answer was a money-integrity bug: getPaymentView would return
+  // the untouched real row (still PENDING_CONFIRMATION, mock: false), the caller
+  // would take the resolved promise as confirmation, and the audit trail would
+  // record a verified webhook for a payment that was never initiated. A settlement
+  // that did not happen has to fail loudly.
+  const settled = settleMockPayment(orderId, outcome);
+
+  if (!settled) {
+    throw new Error(
+      'There is no simulated payment to settle for this order. No payment link was ' +
+        'issued for it in this browser, so nothing was changed and no payment was ' +
+        'recorded. Start the checkout flow again to issue one.',
+    );
+  }
+
   return getPaymentView(orderId);
 }

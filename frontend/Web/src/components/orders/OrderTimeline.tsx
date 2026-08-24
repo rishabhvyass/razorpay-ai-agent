@@ -64,16 +64,32 @@ const FAILURE_LABEL: Partial<Record<OrderStatus, { label: string; detail: string
 };
 
 function buildSteps(status: OrderStatus): Step[] {
-  const current = RANK[status];
+  const reached = RANK[status];
   const failure = FAILURE_LABEL[status];
 
+  // PAID and the three failure states are terminal: nothing about the order is
+  // still in flight. Deriving `current` from rank equality alone got this wrong in
+  // both directions - a PAID order left "Payment verified" pulsing as though the
+  // webhook were still pending, and a PAYMENT_FAILED order left "Payment link
+  // issued - waiting on the customer" pulsing on an order that had already
+  // stopped. On a settled order every step it reached is simply complete.
+  const terminal = status === 'PAID' || failure !== undefined;
+
   const steps: Step[] = HAPPY_PATH.filter(
-    // Once a payment has failed, "Payment verified" is not upcoming - it is not
-    // going to happen for this order. Showing it greyed out implies it might.
-    (step) => !(failure && step.status === 'PAID'),
+    // Beyond the point a failure branched from, the remaining steps are not
+    // upcoming - they are not going to happen for this order at all, and greying
+    // them out implies they still might. CANCELLED branches at the first step, so
+    // it drops the three after it rather than only "Payment verified".
+    (step) => !failure || RANK[step.status] <= reached,
   ).map((step) => {
     const rank = RANK[step.status];
-    const state: StepState = rank < current ? 'done' : rank === current ? 'current' : 'upcoming';
+    const state: StepState = terminal
+      ? 'done'
+      : rank < reached
+        ? 'done'
+        : rank === reached
+          ? 'current'
+          : 'upcoming';
     return { key: step.status, label: step.label, detail: step.detail, state };
   });
 
@@ -86,6 +102,15 @@ function buildSteps(status: OrderStatus): Step[] {
 
 export function OrderTimeline({ order }: { order: Order }) {
   const steps = buildSteps(order.status);
+
+  // `updatedAt` says when the order last moved, so it belongs on the furthest step
+  // the order actually reached: the failure step, the final step of a settled
+  // order, or the one in flight. Keying it off `current` alone meant a PAID order
+  // carried no timestamp at all once nothing was marked current.
+  const stampIndex = steps.reduce(
+    (last, step, index) => (step.state === 'upcoming' ? last : index),
+    0,
+  );
 
   return (
     <ol className="space-y-0">
@@ -132,12 +157,24 @@ export function OrderTimeline({ order }: { order: Order }) {
                 )}
               >
                 {step.label}
+                {/* The state is carried visually by an icon and a colour. Spec
+                    section 37 forbids leaning on colour alone, so it is also
+                    written out for assistive tech. */}
+                <span className="sr-only">
+                  {step.state === 'done'
+                    ? ' — complete'
+                    : step.state === 'current'
+                      ? ' — in progress'
+                      : step.state === 'failed'
+                        ? ' — failed'
+                        : ' — not reached'}
+                </span>
               </p>
               <p className="text-muted mt-0.5 text-xs leading-relaxed">{step.detail}</p>
-              {step.state === 'current' || step.state === 'failed' ? (
+              {index === stampIndex ? (
                 <p className="text-faint nums mt-1 text-[11px]">
                   {/* The row's own timestamp - the backend's record, not a client clock. */}
-                  {formatDateTime(order.updated_at)}
+                  {formatDateTime(order.updatedAt)}
                 </p>
               ) : null}
             </div>

@@ -21,7 +21,8 @@
  */
 
 import { request } from './api';
-import type { ActivityFeed, CreateOrderPayload, Order } from '@/types';
+import { decodeOrder, decodeOrderActivityFeed, decodeOrders } from './decode';
+import type { CreateOrderPayload, Order, OrderActivityFeed } from '@/types';
 
 /**
  * Record an intent to buy. Writes PENDING_CONFIRMATION only - contacts no payment
@@ -35,7 +36,7 @@ import type { ActivityFeed, CreateOrderPayload, Order } from '@/types';
  * double charge once payments are wired up.
  */
 export function createOrder(payload: CreateOrderPayload, signal?: AbortSignal): Promise<Order> {
-  return request<Order>('/api/orders', {
+  return request<unknown>('/api/orders', {
     method: 'POST',
     body: {
       productId: payload.productId,
@@ -45,15 +46,21 @@ export function createOrder(payload: CreateOrderPayload, signal?: AbortSignal): 
       ...(payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : {}),
     },
     signal,
-  });
+  }).then(decodeOrder);
 }
 
 export function getOrder(id: string, signal?: AbortSignal): Promise<Order> {
-  return request<Order>(`/api/orders/${id}`, { signal });
+  return request<unknown>(`/api/orders/${id}`, { signal }).then(decodeOrder);
 }
 
-export function getOrderActivity(id: string, signal?: AbortSignal): Promise<ActivityFeed> {
-  return request<ActivityFeed>(`/api/orders/${id}/activity`, { signal });
+/**
+ * Note the return type. This route answers `{ orderId, status, actions }` - NOT the
+ * `{ actions, orders, summary }` shape the conversation-scoped route returns. It was
+ * declared as the latter, so every consumer that reached for `.summary` was reading a
+ * property off `undefined`.
+ */
+export function getOrderActivity(id: string, signal?: AbortSignal): Promise<OrderActivityFeed> {
+  return request<unknown>(`/api/orders/${id}/activity`, { signal }).then(decodeOrderActivityFeed);
 }
 
 export function getUserOrders(
@@ -61,10 +68,10 @@ export function getUserOrders(
   params: { limit?: number; offset?: number } = {},
   signal?: AbortSignal,
 ): Promise<Order[]> {
-  return request<Order[]>(`/api/users/${userId}/orders`, {
+  return request<unknown>(`/api/users/${userId}/orders`, {
     query: { limit: params.limit, offset: params.offset },
     signal,
-  });
+  }).then(decodeOrders);
 }
 
 /** Statuses that mean "no longer waiting on the provider". Drives poll stop. */

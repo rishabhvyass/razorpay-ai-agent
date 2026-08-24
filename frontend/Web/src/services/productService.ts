@@ -11,6 +11,7 @@
  */
 
 import { request, requestEnvelope } from './api';
+import { decodeProduct, decodeProducts, decodeStrings } from './decode';
 import type { Product, ProductSearchParams } from '@/types';
 
 export interface ProductSearchResult {
@@ -26,7 +27,7 @@ export async function searchProducts(
   params: ProductSearchParams = {},
   signal?: AbortSignal,
 ): Promise<ProductSearchResult> {
-  const envelope = await requestEnvelope<Product[]>('/api/products', {
+  const envelope = await requestEnvelope<unknown>('/api/products', {
     signal,
     query: {
       q: params.q,
@@ -41,12 +42,15 @@ export async function searchProducts(
     },
   });
 
+  // Checked, not cast. An unrecognised product shape stops here rather than
+  // reaching the catalogue grid as a row of blank cards.
+  const products = decodeProducts(envelope.data);
   const meta = envelope.meta as ProductSearchResult['meta'] | undefined;
 
   return {
-    products: envelope.data ?? [],
+    products,
     meta: {
-      count: meta?.count ?? envelope.data?.length ?? 0,
+      count: meta?.count ?? products.length,
       limit: meta?.limit ?? 20,
       offset: meta?.offset ?? 0,
     },
@@ -54,9 +58,11 @@ export async function searchProducts(
 }
 
 export function getCategories(signal?: AbortSignal): Promise<string[]> {
-  return request<string[]>('/api/products/categories', { signal });
+  return request<unknown>('/api/products/categories', { signal }).then((value) =>
+    decodeStrings(value, 'category'),
+  );
 }
 
 export function getProduct(id: string, signal?: AbortSignal): Promise<Product> {
-  return request<Product>(`/api/products/${id}`, { signal });
+  return request<unknown>(`/api/products/${id}`, { signal }).then(decodeProduct);
 }

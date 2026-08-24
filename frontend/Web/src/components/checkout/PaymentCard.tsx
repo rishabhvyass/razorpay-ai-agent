@@ -1,9 +1,14 @@
+import { useState } from 'react';
 import { CreditCard, Info } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { useCheckoutSession } from '@/hooks/useCheckoutSession';
 import { config } from '@/lib/config';
 import { Badge, Card, CardHeader, ErrorState, MockBadge, SkeletonText } from '@/components/ui';
-import { OrderStatusBadge, orderStatusMeaning } from '@/components/orders/OrderStatus';
+import {
+  ORDER_STATUS_PRESENTATION,
+  OrderStatusBadge,
+  orderStatusMeaning,
+} from '@/components/orders/OrderStatus';
 import { OrderIdentifiers, OrderTotals } from './OrderSummary';
 import { PaymentPending } from './PaymentPending';
 import { PaymentSuccess } from './PaymentSuccess';
@@ -27,20 +32,45 @@ export function PaymentCard({
   fallbackOrder,
   product,
   fallbackPaymentUrl,
-  onRetry,
+  onRefresh,
 }: {
   orderId: string;
   fallbackOrder?: Order;
   product?: Product | null;
   fallbackPaymentUrl?: string | null;
-  onRetry?: () => void;
+  /**
+   * Lets the parent re-read its own copy of the order alongside this card's poll.
+   * The card owns `qk.orders.payment`; a page that also renders `qk.orders.detail`
+   * has to refetch that itself, or the two disagree.
+   */
+  onRefresh?: () => void;
 }) {
   const session = useCheckoutSession();
   const payment = usePaymentStatus(orderId);
 
+  const [simulateError, setSimulateError] = useState<unknown>(null);
+  const [simulating, setSimulating] = useState(false);
+
   const order = payment.data?.order ?? fallbackOrder;
   const paymentUrl = payment.data?.paymentUrl ?? fallbackPaymentUrl ?? null;
+  // Whether a simulated payment actually exists for this order, which is not the
+  // same question as whether the app is in mock mode. Gating the settle controls on
+  // `config.useMock` offered them for orders that had no overlay at all, so pressing
+  // one asked the app to settle a payment nothing had initiated.
   const isMock = payment.data?.mock ?? false;
+
+  const simulate = async (outcome: 'success' | 'failure') => {
+    if (!order || simulating) return;
+    setSimulating(true);
+    setSimulateError(null);
+    try {
+      await session.simulate(order.id, outcome);
+    } catch (error) {
+      setSimulateError(error);
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   if (payment.isError && !order) {
     return (
@@ -80,6 +110,15 @@ export function PaymentCard({
         </div>
       </div>
 
+      {/* This status changes on a poll, with no user action to anchor the change, so
+          it is announced. Without a live region the one user who most needs to know a
+          payment settled has no way to find out short of re-reading the page. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        Payment status: {ORDER_STATUS_PRESENTATION[order.status].label}.{' '}
+        {orderStatusMeaning(order.status)}
+        {isMock ? ' This state came from the labelled simulation, not a verified payment.' : ''}
+      </p>
+
       <div className="space-y-4 p-4">
         <OrderTotals order={order} product={product ?? null} />
 
@@ -87,37 +126,47 @@ export function PaymentCard({
           {terminalPaid ? (
             <PaymentSuccess
               order={order}
-              paymentId={payment.data?.paymentId ?? order.razorpay_payment_id}
+              paymentId={payment.data?.paymentId ?? order.razorpayPaymentId}
               isMock={isMock}
             />
           ) : terminalFailed ? (
             <PaymentFailure
               order={order}
               reason={payment.data?.failureReason ?? null}
-              {...(onRetry ? { onRetry } : {})}
+              // The card's own poll is the query that feeds it, so a re-check has to
+              // refetch that. The parent-supplied refresh is additional, not instead:
+              // OrderDetailPage previously passed only its `qk.orders.detail` refetch,
+              // which is a different key from the `qk.orders.payment` rendered here, so
+              // pressing the button changed nothing visible on this card.
+              onRecheck={() => {
+                void payment.refetch();
+                onRefresh?.();
+              }}
             />
-          ) : order.status === 'PENDING_CONFIRMATION' && !config.useMock ? (
-            // Real mode with no payments layer: the order exists, and that is all
-            // that can honestly be shown. No link is fabricated.
+          ) : order.status === 'PENDING_CONFIRMATION' && !isMock ? (
+            // The order exists and nothing has been initiated against it. That is all
+            // that can honestly be shown: no link is fabricated, and no settle control
+            // is offered for a payment that was never started.
             <div className="space-y-3">
               <Badge tone="neutral" icon={<Info className="size-3" aria-hidden />}>
-                Payments layer not implemented
+                {config.useMock ? 'No payment link issued' : 'Payments layer not implemented'}
               </Badge>
               <p className="text-muted text-[13px] leading-relaxed">
                 The order is recorded in the database at{' '}
-                <code className="text-ink">PENDING_CONFIRMATION</code>. Creating the Razorpay order
-                and issuing a payment link happen server-side, and those endpoints have not shipped
-                yet — so no link was created and nothing was charged.
+                <code className="text-ink">PENDING_CONFIRMATION</code>.{' '}
+                {config.useMock
+                  ? 'No simulated payment link exists for it in this browser — the local overlay was reset, or the order was created before it. Nothing was charged, and there is no payment here to settle.'
+                  : 'Creating the Razorpay order and issuing a payment link happen server-side, and those endpoints have not shipped yet — so no link was created and nothing was charged.'}
               </p>
             </div>
           ) : (
             <PaymentPending
               order={order}
               paymentUrl={paymentUrl}
-              isMock={config.useMock}
-              {...(config.useMock
-                ? { onSimulate: (outcome) => void session.simulate(order.id, outcome) }
-                : {})}
+              isMock={isMock}
+              simulateError={simulateError}
+              simulating={simulating}
+              {...(isMock ? { onSimulate: (outcome) => void simulate(outcome) } : {})}
             />
           )}
         </div>

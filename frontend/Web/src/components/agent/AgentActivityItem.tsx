@@ -78,7 +78,7 @@ function actionTypeStyle(actionType: string): {
 
 export function AgentActivityItem({ action }: { action: AgentAction }) {
   const [expanded, setExpanded] = useState(false);
-  const type = actionTypeStyle(action.action_type);
+  const type = actionTypeStyle(action.actionType);
   const status = STATUS[action.status] ?? STATUS.started;
   const hasPayload = action.input !== null || action.output !== null;
 
@@ -94,12 +94,12 @@ export function AgentActivityItem({ action }: { action: AgentAction }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-ink font-mono text-[12px] font-medium">{action.tool_name}</span>
+            <span className="text-ink font-mono text-[12px] font-medium">{action.toolName}</span>
             <Badge tone={status.tone} icon={status.icon}>
               {status.label}
             </Badge>
             <span className="text-faint nums ml-auto shrink-0 text-[11px]">
-              {formatTime(action.created_at)}
+              {formatTime(action.createdAt)}
             </span>
           </div>
 
@@ -107,10 +107,10 @@ export function AgentActivityItem({ action }: { action: AgentAction }) {
             <p className="text-muted mt-1 text-[12px] leading-relaxed">{action.reason}</p>
           ) : null}
 
-          {action.error_message ? (
+          {action.errorMessage ? (
             <p className="text-danger mt-1 text-[12px] leading-relaxed">
-              {action.error_code ? `${action.error_code}: ` : ''}
-              {action.error_message}
+              {action.errorCode ? `${action.errorCode}: ` : ''}
+              {action.errorMessage}
             </p>
           ) : null}
 

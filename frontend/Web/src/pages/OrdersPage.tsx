@@ -94,7 +94,7 @@ export function OrdersPage() {
         ) : isMobile ? (
           <div className="space-y-2.5">
             {orders.map((order) => (
-              <OrderCard key={order.id} order={order} productName={productName(order.product_id)} />
+              <OrderCard key={order.id} order={order} productName={productName(order.productId)} />
             ))}
           </div>
         ) : (

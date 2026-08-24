@@ -8,19 +8,19 @@ import type { Product } from '@/types';
 /**
  * Product image with a graceful fallback.
  *
- * Catalogue rows have a nullable `image_url`, and seeded demo data often points at
+ * Catalogue rows have a nullable `imageUrl`, and seeded demo data often points at
  * URLs that no longer resolve. A broken-image glyph in a card that otherwise looks
  * finished reads as a bug; a deliberate placeholder reads as missing data.
  */
 function ProductImage({ product, className }: { product: Product; className?: string }) {
   const [failed, setFailed] = useState(false);
-  const showImage = Boolean(product.image_url) && !failed;
+  const showImage = Boolean(product.imageUrl) && !failed;
 
   return (
     <div className={cn('bg-surface-sunken relative overflow-hidden', className)}>
       {showImage ? (
         <img
-          src={product.image_url ?? ''}
+          src={product.imageUrl ?? ''}
           alt={product.name}
           loading="lazy"
           onError={() => setFailed(true)}

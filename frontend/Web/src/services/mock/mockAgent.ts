@@ -35,7 +35,7 @@ const now = (): string => new Date().toISOString();
 
 function mockAction(init: {
   toolName: string;
-  actionType: AgentAction['action_type'];
+  actionType: AgentAction['actionType'];
   reason: string;
   status: AgentAction['status'];
   input?: AgentAction['input'];
@@ -43,18 +43,18 @@ function mockAction(init: {
 }): AgentAction {
   return {
     id: nextId('act'),
-    conversation_id: null,
-    order_id: null,
-    tool_name: init.toolName,
-    action_type: init.actionType,
+    conversationId: null,
+    orderId: null,
+    toolName: init.toolName,
+    actionType: init.actionType,
     reason: init.reason,
     input: init.input ?? null,
     output: init.output ?? null,
     status: init.status,
-    error_code: null,
-    error_message: null,
-    request_id: nextId('req'),
-    created_at: now(),
+    errorCode: null,
+    errorMessage: null,
+    requestId: nextId('req'),
+    createdAt: now(),
   };
 }
 
@@ -161,6 +161,13 @@ function assistantTurn(content: string, extra: Partial<ChatTurn> = {}): ChatTurn
 export async function mockChat(args: {
   message: string;
   standingProduct: Product | null;
+  /**
+   * Called when the work being done changes, so the UI can name it. Reported from
+   * here rather than guessed at by a timer in the component: the only reason this
+   * adapter can honestly say "searching the catalogue" is that it is the thing
+   * awaiting `searchProducts`.
+   */
+  onPhase?: (phase: 'thinking' | 'searching-catalogue') => void;
 }): Promise<ChatResponse> {
   await wait(THINK_MS);
 
@@ -275,6 +282,7 @@ export async function mockChat(args: {
     });
 
     try {
+      args.onPhase?.('searching-catalogue');
       // Real endpoint, real catalogue.
       const result = await searchProducts({
         ...(intent.terms ? { q: intent.terms } : {}),
@@ -358,9 +366,13 @@ export async function mockChat(args: {
 export function mockApprovalActions(args: {
   productName: string;
   orderId: string;
-  razorpayOrderId: string;
-  paymentLinkId: string;
+  /** Null when the simulated provider issued nothing. */
+  razorpayOrderId: string | null;
+  /** Null when no link was issued - the link step is then recorded as failed. */
+  paymentLinkId: string | null;
 }): AgentAction[] {
+  const linkIssued = args.paymentLinkId !== null;
+
   return [
     mockAction({
       toolName: 'purchase_approved',
@@ -381,15 +393,22 @@ export function mockApprovalActions(args: {
       toolName: 'create_payment_link',
       actionType: 'MONEY_ACTION',
       reason: 'Order created; issuing a payment link for the user to complete.',
-      status: 'success',
+      status: linkIssued ? 'success' : 'failed',
       output: { paymentLinkId: args.paymentLinkId },
     }),
-    mockAction({
-      toolName: 'payment_pending',
-      actionType: 'SYSTEM_ACTION',
-      reason: 'Waiting for a signature-verified payment confirmation.',
-      status: 'started',
-    }),
+    // Only claim we are waiting on a confirmation if something was actually
+    // issued to confirm. Otherwise the trail shows a payment in flight that
+    // nothing is going to settle.
+    ...(linkIssued
+      ? [
+          mockAction({
+            toolName: 'payment_pending',
+            actionType: 'SYSTEM_ACTION',
+            reason: 'Waiting for a signature-verified payment confirmation.',
+            status: 'started',
+          }),
+        ]
+      : []),
   ];
 }
 

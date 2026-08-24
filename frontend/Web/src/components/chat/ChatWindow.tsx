@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Sparkles, Trash2 } from 'lucide-react';
-import { useCheckoutSession } from '@/hooks/useCheckoutSession';
+import { AGENT_PHASE_LABEL, useCheckoutSession } from '@/hooks/useCheckoutSession';
 import { config } from '@/lib/config';
 import { SUGGESTED_PROMPTS } from '@/types';
 import { Button, MockNotice } from '@/components/ui';
@@ -21,10 +21,12 @@ function EmptyConversation({
       <span className="bg-accent-50 border-accent-100 mb-4 grid size-11 place-items-center rounded-full border">
         <Sparkles className="text-accent size-5" aria-hidden />
       </span>
-      <h2 className="text-ink text-base font-semibold">What are you shopping for?</h2>
+      <h2 className="text-ink text-base font-semibold">Your AI shopping assistant</h2>
       <p className="text-muted mt-1.5 text-[13px] leading-relaxed">
-        Describe it in your own words — a category, a budget, or both. I search the real catalogue,
-        and I will always ask before anything involving money.
+        Tell me what you&apos;re looking for and I&apos;ll help you find it.
+      </p>
+      <p className="text-faint mt-2 text-[12px] leading-relaxed">
+        I search the real catalogue, and I will always ask before anything involving money.
       </p>
 
       <div className="mt-6 w-full space-y-2">
@@ -51,11 +53,13 @@ export function ChatWindow() {
   const session = useCheckoutSession();
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const busy = session.isThinking || session.isConfirming;
+
+  // `busy`, not `isThinking` alone: the indicator appears for either mutation, and
+  // keying the scroll to only one of them left the confirm-flow bubble below the fold.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [session.turns.length, session.isThinking]);
-
-  const busy = session.isThinking || session.isConfirming;
+  }, [session.turns.length, busy]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -89,8 +93,22 @@ export function ChatWindow() {
             ))
           )}
 
-          {session.isThinking ? <ThinkingIndicator /> : null}
-          {session.isConfirming ? <ThinkingIndicator label="Creating your order" /> : null}
+          {/* One bubble, relabelled as the work moves, rather than one bubble per
+              mutation: both flags could be pending at once and the surface would then
+              show two agents thinking. The label comes from `session.phase`, which is
+              set immediately before each await and cleared when it settles, so it
+              always names a request that is genuinely in flight. Falling back to the
+              pending mutation's own phase covers the instant between a mutation
+              starting and its first phase being set. */}
+          {busy ? (
+            <ThinkingIndicator
+              label={
+                AGENT_PHASE_LABEL[
+                  session.phase ?? (session.isConfirming ? 'creating-order' : 'thinking')
+                ]
+              }
+            />
+          ) : null}
 
           <div ref={bottomRef} className="h-px" />
         </div>

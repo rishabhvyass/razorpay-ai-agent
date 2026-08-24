@@ -20,7 +20,11 @@ import type { ActivityFeed } from '@/types';
  *
  * `sources` is returned so the page can state exactly which scopes were queried.
  * An audit trail that looks complete but is a slice would undermine the one thing
- * this panel is for.
+ * this panel is for. For the same reason `sources.unreadableOrderCount` counts the
+ * per-order feeds that FAILED: those scopes were queried and answered with an error,
+ * so their actions are missing from the merge. Reporting only the conversation
+ * feed's error - as this hook first did - meant every order feed could fail while
+ * the page presented the remainder as the whole trail.
  */
 export function useAuditTrail() {
   const session = useCheckoutSession();
@@ -71,7 +75,7 @@ export function useAuditTrail() {
 
     // Local mock actions are merged the same way, so dedupe-by-id still holds and
     // the summary counts each action once.
-    return mergeFeeds([merged, { actions: session.localActions, orders: [], summary: merged.summary }]);
+    return mergeFeeds([merged, { actions: session.localActions }]);
     // The revision strings above stand in for the query arrays the body reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.localActions, conversationRevision, orderRevision]);
@@ -81,7 +85,18 @@ export function useAuditTrail() {
     conversationFeed.some((query) => query.isPending) ||
     orderFeeds.some((query) => query.isPending);
 
+  // `error` is reserved for failures that leave this view with nothing it can
+  // trust: the conversation feed, or the order list itself. A per-order feed
+  // failing is deliberately NOT promoted here, because ActivityPage renders `error`
+  // in place of the timeline - one stale order id, which this app expects (an id
+  // recorded in localStorage can outlive its row between demo runs, which is why
+  // these queries set `retry: false`), would blank an otherwise complete trail.
+  //
+  // It is reported instead as a count the page states above the list. That keeps
+  // both halves true: what is shown is shown, and what is missing is named.
   const error = conversationFeed.find((query) => query.isError)?.error ?? known.error ?? null;
+
+  const unreadableOrderCount = orderFeeds.filter((query) => query.isError).length;
 
   return {
     feed,
@@ -90,6 +105,8 @@ export function useAuditTrail() {
     sources: {
       conversationId: session.conversationId,
       orderCount: orderIds.length,
+      /** Order scopes whose activity read failed. Their actions are not in `feed`. */
+      unreadableOrderCount,
       localCount: session.localActions.length,
       scope: known.scope,
     },

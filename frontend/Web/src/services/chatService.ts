@@ -33,6 +33,12 @@ export interface SendMessageArgs {
    * real endpoint derives this from server-side conversation state and ignores it.
    */
   standingProduct?: Product | null;
+  /**
+   * Progress reporting for the UI's loading copy. Only the mock can populate it:
+   * `POST /api/chat` is one opaque round trip, so in real mode the phase stays
+   * 'thinking' rather than the UI inventing steps it cannot observe.
+   */
+  onPhase?: (phase: 'thinking' | 'searching-catalogue') => void;
   signal?: AbortSignal;
 }
 
@@ -41,6 +47,7 @@ export async function sendMessage(args: SendMessageArgs): Promise<ChatResponse> 
     return mockChat({
       message: args.message,
       standingProduct: args.standingProduct ?? null,
+      ...(args.onPhase ? { onPhase: args.onPhase } : {}),
     });
   }
 

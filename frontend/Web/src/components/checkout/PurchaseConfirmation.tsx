@@ -54,7 +54,7 @@ export function PurchaseConfirmation({
       <div className="border-accent-200 flex items-center gap-2 border-b bg-white/70 px-4 py-2.5">
         <ShieldAlert className="text-accent size-3.5 shrink-0" aria-hidden />
         <h3 className="text-accent-900 text-[12px] font-semibold tracking-wide uppercase">
-          Your authorisation required
+          Purchase confirmation
         </h3>
       </div>
 
@@ -70,8 +70,17 @@ export function PurchaseConfirmation({
           <StockBadge stock={product.stock} />
         </div>
 
-        <div className="rounded-control border-line bg-surface flex items-baseline justify-between gap-3 border px-3.5 py-3">
-          <span className="text-muted text-[12px] font-medium">Total to authorise</span>
+        <div className="rounded-control border-line bg-surface divide-y divide-[var(--color-line)] border">
+          <div className="flex items-baseline justify-between gap-3 px-3.5 py-2">
+            <span className="text-muted text-[12px] font-medium">Quantity</span>
+            <span className="text-ink nums text-[13px] font-medium">{quantity}</span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 px-3.5 py-2">
+            <span className="text-muted text-[12px] font-medium">Environment</span>
+            <span className="text-ink text-[13px] font-medium">Razorpay Test Mode</span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 px-3.5 py-3">
+          <span className="text-muted text-[12px] font-medium">Total</span>
           <span
             className="text-ink nums text-lg leading-none font-semibold"
             // Currency symbols are read inconsistently by screen readers, and this
@@ -80,14 +89,15 @@ export function PurchaseConfirmation({
           >
             {formatMinor(amountMinor, currency)}
           </span>
+          </div>
         </div>
 
         <div className="flex items-start gap-2">
           <Info className="text-muted mt-0.5 size-3.5 shrink-0" aria-hidden />
           <p className="text-muted text-[12px] leading-relaxed">
-            Confirming records an order and requests a payment link. <strong>Nothing is charged
-            yet</strong> — you complete the payment yourself, and this app will only report success
-            after Razorpay verifies it.
+            The agent is requesting permission to create this payment.{' '}
+            <strong>Nothing is charged yet</strong> — you complete the payment yourself, and this app
+            will only report success after Razorpay verifies it.
           </p>
         </div>
 

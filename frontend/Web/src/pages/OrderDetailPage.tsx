@@ -22,7 +22,7 @@ export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const order = useOrder(id);
   const activity = useOrderActivity(id);
-  const product = useProduct(order.data?.product_id);
+  const product = useProduct(order.data?.productId);
 
   if (order.isPending) {
     return (
@@ -111,7 +111,13 @@ export function OrderDetailPage() {
               orderId={row.id}
               fallbackOrder={row}
               product={product.data ?? null}
-              onRetry={() => void order.refetch()}
+              onRefresh={() => {
+                // The card refetches its own payment query. These two are this
+                // page's: the order row the header and lifecycle read, and the
+                // audit trail, which gains an entry when the status moves.
+                void order.refetch();
+                void activity.refetch();
+              }}
             />
 
             {product.data ? (

@@ -38,12 +38,21 @@ export interface MockPaymentState {
   updatedAt: string;
 }
 
-/** Survives a page reload so a polling status view does not reset mid-demo. */
+/**
+ * Survives a page reload so a polling status view does not reset mid-demo.
+ *
+ * localStorage, NOT sessionStorage, and specifically to match `cc.orderIds` in
+ * lib/session.ts. The overlay is keyed by order id, so if the two stores have
+ * different lifetimes they disagree: the orders list (localStorage) would show an
+ * order whose payment state (sessionStorage) had silently evaporated, and the same
+ * order would read PAID in one tab and PENDING_CONFIRMATION in another. Real
+ * provider state is not per-tab, so the thing standing in for it must not be either.
+ */
 const STORAGE_KEY = 'cc.mock.payments.v1';
 
 function loadStore(): Map<string, MockPaymentState> {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return new Map();
     return new Map(Object.entries(JSON.parse(raw) as Record<string, MockPaymentState>));
   } catch {
@@ -53,9 +62,9 @@ function loadStore(): Map<string, MockPaymentState> {
 
 function persist(store: Map<string, MockPaymentState>): void {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(store)));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(store)));
   } catch {
-    // sessionStorage unavailable (private mode quota). In-memory still works for
+    // localStorage unavailable (private mode quota). In-memory still works for
     // the current page, which is enough - this is a dev fallback.
   }
 }
@@ -141,7 +150,7 @@ export function settleMockPayment(
 export function resetMockPayments(): void {
   store.clear();
   try {
-    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
   } catch {
     /* ignore */
   }

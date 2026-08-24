@@ -60,6 +60,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(
         'inline-flex items-center justify-center font-medium whitespace-nowrap transition-all duration-150',
         'disabled:cursor-not-allowed disabled:opacity-50',
+        // `aria-disabled` styled the same as `disabled`, for the case where a control
+        // must stay focusable so a screen reader can reach the explanation of why it
+        // is unavailable. A truly `disabled` button leaves the tab order, which takes
+        // its `aria-describedby` with it. Callers using it are responsible for
+        // guarding their own handler - the attribute is advisory to the browser.
+        'aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
         VARIANTS[variant],
         SIZES[size],
         fullWidth && 'w-full',
