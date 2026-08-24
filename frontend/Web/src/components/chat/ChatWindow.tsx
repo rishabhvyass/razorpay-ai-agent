@@ -83,11 +83,9 @@ export function ChatWindow() {
                 confirmationState={session.confirmations[turn.id]}
                 onConfirm={session.confirmPurchase}
                 onDecline={session.declinePurchase}
-                onSelectProduct={(product) =>
-                  // Intent goes back through the agent, which replies with the
-                  // authorisation card. Selecting a product never starts a purchase.
-                  session.send(`I'd like to buy the ${product.name}`)
-                }
+                // Intent goes back through the agent, which replies with the
+                // authorisation card. Selecting a product never starts a purchase.
+                onSelectProduct={session.selectProduct}
                 busy={busy}
               />
             ))

@@ -93,9 +93,31 @@ export function PaymentSteps({
     order.status === 'PAYMENT_PENDING' ||
     paid;
 
+  // A settled order has nothing in progress. Reading "Payment link generated - in
+  // progress" underneath "Payment not verified - failed" describes a payment that is
+  // still moving, on an order that has stopped. Which of the two replaces it depends
+  // on what the terminal status actually implies:
+  //
+  //   PAYMENT_FAILED / PAYMENT_EXPIRED  the provider had an attempt to decline or
+  //                                     expire, so a link existed. Done.
+  //   CANCELLED                         says nothing about whether a link was ever
+  //                                     issued, so it is left not-started rather
+  //                                     than claimed either way.
+  //
+  // This is only reached when the link itself is not in hand: the mock overlay's URL
+  // is not threaded through the failure card, and a real failed order keeps no live
+  // URL, so `hasLink` cannot see one even though one existed.
+  const linkState: StepState = hasLink
+    ? 'done'
+    : order.status === 'PAYMENT_FAILED' || order.status === 'PAYMENT_EXPIRED'
+      ? 'done'
+      : order.status === 'CANCELLED'
+        ? 'upcoming'
+        : 'current';
+
   const steps: Array<{ label: string; state: StepState }> = [
     { label: 'Order created', state: 'done' },
-    { label: 'Payment link generated', state: hasLink ? 'done' : 'current' },
+    { label: 'Payment link generated', state: linkState },
   ];
 
   if (failed) {

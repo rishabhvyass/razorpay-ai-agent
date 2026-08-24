@@ -168,10 +168,23 @@ export async function mockChat(args: {
    * awaiting `searchProducts`.
    */
   onPhase?: (phase: 'thinking' | 'searching-catalogue') => void;
+  /**
+   * Set when a control, not free text, produced this message - selecting a
+   * recommendation. `parseIntent` is a keyword guess standing in for a model, and it
+   * classified "I'd like to buy the Midnight Black Hoodie" as a search, because the
+   * product name reads as search terms. A click is not ambiguous, so it is not
+   * guessed at.
+   *
+   * It decides which BRANCH runs, not what the branch is allowed to do. The buy
+   * branch checks stock and returns an authorisation card; it creates no order and
+   * moves no money, exactly as when the user types "yes, buy it".
+   */
+  declaredIntent?: 'buy';
 }): Promise<ChatResponse> {
   await wait(THINK_MS);
 
-  const intent = parseIntent(args.message);
+  const intent: ParsedIntent =
+    args.declaredIntent === 'buy' ? { kind: 'buy', terms: '' } : parseIntent(args.message);
 
   if (intent.kind === 'greeting') {
     return {

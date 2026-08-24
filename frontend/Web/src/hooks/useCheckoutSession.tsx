@@ -106,6 +106,17 @@ export interface CheckoutSessionValue {
   sendError: unknown;
 
   send: (message: string) => void;
+  /**
+   * The user picked a recommendation. Sends the same user turn `send` would, and
+   * additionally tells the adapter that the intent came from a control rather than
+   * from text it has to interpret. Selecting still only asks for an authorisation
+   * card - it creates no order.
+   *
+   * Separate from `send` rather than a second argument to it, because `send` is
+   * handed to inputs as a bare callback and an extra positional parameter would then
+   * be whatever those components happen to pass second.
+   */
+  selectProduct: (product: Product) => void;
   confirmPurchase: (turnId: string, args: { product: Product; quantity: number }) => void;
   declinePurchase: (turnId: string) => void;
   /** Mock-only. Drives the deliberate success / failure demo. */
@@ -114,6 +125,15 @@ export interface CheckoutSessionValue {
 }
 
 const CheckoutSessionContext = createContext<CheckoutSessionValue | null>(null);
+
+/**
+ * What the send mutation is given. An object rather than a bare string so the
+ * provenance of the intent can travel with the message - see `selectProduct`.
+ */
+interface SendVariables {
+  message: string;
+  declaredIntent?: 'buy';
+}
 
 let seq = 0;
 const localId = (prefix: string): string => {
@@ -243,7 +263,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------------------
 
   const sendMutation = useMutation({
-    mutationFn: async (message: string) => {
+    mutationFn: async ({ message, declaredIntent }: SendVariables) => {
       const id = await ensureConversation();
 
       if (id) {
@@ -261,6 +281,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         conversationId: id ?? 'local',
         message,
         standingProduct,
+        ...(declaredIntent ? { declaredIntent } : {}),
         onPhase: setPhase,
       });
     },
@@ -299,8 +320,8 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
     onSettled: () => setPhase(null),
   });
 
-  const send = useCallback(
-    (message: string) => {
+  const dispatch = useCallback(
+    (message: string, declaredIntent?: 'buy') => {
       const trimmed = message.trim();
       if (trimmed === '' || sendMutation.isPending) return;
 
@@ -315,9 +336,22 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
 
       if (!transcriptRecording) warnTranscript();
       setPhase('thinking');
-      sendMutation.mutate(trimmed);
+      sendMutation.mutate({ message: trimmed, ...(declaredIntent ? { declaredIntent } : {}) });
     },
     [appendTurns, sendMutation, transcriptRecording, warnTranscript],
+  );
+
+  /** Free text the user typed. Intent is whatever the agent makes of it. */
+  const send = useCallback((message: string) => dispatch(message), [dispatch]);
+
+  /**
+   * The user pressed the button on a recommendation. The transcript still records a
+   * sentence in the user's voice, because that is what they asked for, but the
+   * adapter is told the intent rather than left to infer it from the product name.
+   */
+  const selectProduct = useCallback(
+    (product: Product) => dispatch(`I'd like to buy the ${product.name}`, 'buy'),
+    [dispatch],
   );
 
   // ---------------------------------------------------------------------------
@@ -549,6 +583,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       phase,
       sendError: sendMutation.error,
       send,
+      selectProduct,
       confirmPurchase,
       declinePurchase,
       simulate,
@@ -564,6 +599,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       localActions,
       phase,
       reset,
+      selectProduct,
       send,
       sendMutation.error,
       sendMutation.isPending,
