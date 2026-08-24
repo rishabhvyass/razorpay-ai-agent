@@ -117,7 +117,11 @@ export async function requestEnvelope<T>(
     });
   } catch (cause) {
     const aborted = controller.signal.aborted;
-    const timedOut = aborted && String(controller.signal.reason?.message) === 'timeout';
+    // The timeout path aborts with `new Error('timeout')` (above); a caller abort
+    // forwards the caller's reason. `signal.reason` is typed `any`, so narrow it
+    // through Error rather than reaching into `.message` blind.
+    const reason: unknown = controller.signal.reason;
+    const timedOut = aborted && reason instanceof Error && reason.message === 'timeout';
 
     // A caller-driven cancellation must propagate as an abort, not as a visible
     // error - React Query treats it as a cancellation and keeps the prior data.

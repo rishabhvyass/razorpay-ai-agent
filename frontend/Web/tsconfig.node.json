@@ -4,6 +4,10 @@
     "target": "ES2023",
     "lib": ["ES2023"],
     "module": "ESNext",
+    // vite.config.ts runs in Node, not the browser. @types/node is dev-only and
+    // adds nothing to the bundle - it is what makes `node:url` and import.meta.url
+    // type-check here.
+    "types": ["node"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

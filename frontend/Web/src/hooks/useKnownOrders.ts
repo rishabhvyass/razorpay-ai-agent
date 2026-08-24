@@ -47,6 +47,11 @@ export function useKnownOrders() {
     })),
   });
 
+  // TanStack's per-query revision counter, joined into one primitive that changes
+  // exactly when some local order's data changed. Hoisted out of the dep array
+  // because a dependency has to be a plain value, not a fresh expression each render.
+  const localRevision = localOrders.map((query) => query.dataUpdatedAt).join(',');
+
   const orders = useMemo<Order[]>(() => {
     const byId = new Map<string, Order>();
 
@@ -58,9 +63,9 @@ export function useKnownOrders() {
     return [...byId.values()].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
-    // localOrders is a new array each render; its data identity is what matters.
+    // localRevision above stands in for the localOrders array the body reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userOrders.data, localOrders.map((query) => query.dataUpdatedAt).join(',')]);
+  }, [userOrders.data, localRevision]);
 
   const isPending =
     (Boolean(userId) && userOrders.isPending) ||

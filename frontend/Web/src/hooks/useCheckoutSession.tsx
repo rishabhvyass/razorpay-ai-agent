@@ -292,7 +292,9 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
   const confirmMutation = useMutation({
     mutationFn: async (args: { turnId: string; product: Product; quantity: number }) => {
       const key = `${args.turnId}:${args.product.id}:${args.quantity}`;
-      idempotencyKeys.current[key] ??= uuid();
+      // `??=` both stores and returns the key, so this local is the definite value
+      // and no non-null assertion is needed to read it back out of the ref.
+      const idempotencyKey = (idempotencyKeys.current[key] ??= uuid());
 
       // REAL endpoint. Writes PENDING_CONFIRMATION, moves no money, and computes
       // the amount server-side from the product row.
@@ -301,7 +303,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         quantity: args.quantity,
         conversationId,
         userId: getUserId(),
-        idempotencyKey: idempotencyKeys.current[key]!,
+        idempotencyKey,
       });
 
       recordOrderId(order.id);
