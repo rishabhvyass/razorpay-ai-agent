@@ -88,8 +88,12 @@ export function formatMinorUnits(amountMinor: number, currency: string): string 
       maximumFractionDigits: digits,
     }).format(major);
   } catch {
-    // Unknown currency code - degrade to a readable string rather than throw
-    // inside a serialiser.
+    // Reached only for a MALFORMED code, not merely an unknown one. ECMA-402
+    // accepts any well-formed 3-ASCII-letter code, so 'ZZZ' formats happily as
+    // "ZZZ 10.00" and never lands here; 'US', 'RUPEES' and '' throw RangeError.
+    // Degrading rather than rethrowing matters because this runs inside
+    // toPublicProduct / toPublicOrder - a bad currency string in one row should
+    // not take down the whole response.
     return `${currency.toUpperCase()} ${major.toFixed(digits)}`;
   }
 }

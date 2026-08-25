@@ -5,10 +5,15 @@
  * each position is load-bearing and noted where it matters.
  *
  * What this phase deliberately does not include: no Claude client, no
- * AgentRouter, no MCP server, no Razorpay, no payment links, no webhook handler,
- * no Telegram. The database and its access layer come first, because everything
- * above depends on the order state machine and the audit trail being right, and
- * those are far cheaper to correct now than after four layers are built on them.
+ * AgentRouter, no MCP server, no Telegram. The database and its access layer came
+ * first, because everything above depends on the order state machine and the audit
+ * trail being right, and those are far cheaper to correct now than after four
+ * layers are built on them.
+ *
+ * The payments layer is built on top of it: Razorpay Payment Links, the webhook
+ * receiver, and the reconcile endpoint. The agent layer is still absent, so
+ * /api/chat remains unimplemented - which means money can move here only through an
+ * explicitly authorised HTTP call, never on an agent's own initiative.
  */
 
 import cors from 'cors';
@@ -19,8 +24,10 @@ import { pathToFileURL } from 'node:url';
 import { conversationsRouter } from './api/conversations.js';
 import { healthRouter } from './api/health.js';
 import { ordersRouter } from './api/orders.js';
+import { paymentsRouter } from './api/payments.js';
 import { productsRouter } from './api/products.js';
-import { env, isProduction } from './config/env.js';
+import { webhooksRouter } from './api/webhooks.js';
+import { env, isProduction, isRazorpayConfigured, RAZORPAY_ENV_VARS } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { REQUEST_ID_HEADER, requestId } from './middleware/requestId.js';
 import { SERVICE_NAME, getReadiness } from './services/healthService.js';
@@ -54,6 +61,33 @@ export function createApp(): Express {
     }),
   );
 
+  /**
+   * BEFORE express.json(), and this ordering is load-bearing.
+   *
+   * The Razorpay webhook is authenticated by an HMAC over the exact bytes that
+   * arrived. `express.json()` parses the body and throws the bytes away, and
+   * re-serialising the parsed object does not reproduce them - key order,
+   * whitespace and number formatting all differ - so a signature check downstream of
+   * it would reject valid deliveries. `express.raw()` hands the handler a Buffer
+   * instead.
+   *
+   * Scoped to this one path rather than done with a global `verify` hook, so no
+   * other route pays the cost of buffering its body, and no other route can
+   * accidentally end up with an unparsed one.
+   *
+   * Still AFTER `requestId` (above): a parser error on a webhook has to remain
+   * reportable in the standard envelope.
+   *
+   * 256kb rather than the 100kb used elsewhere. A `payment_link.paid` delivery
+   * carries three nested entities plus notes, and the size is chosen by the provider,
+   * not by us - a delivery rejected for size would be retried forever.
+   */
+  app.use(
+    '/api/webhooks',
+    express.raw({ type: 'application/json', limit: '256kb' }),
+    webhooksRouter,
+  );
+
   // 100kb, well above any legitimate request here. The default is also 100kb;
   // stating it means a future change is a decision rather than an inheritance.
   app.use(express.json({ limit: '100kb' }));
@@ -80,6 +114,9 @@ export function createApp(): Express {
   // Mounted at /api because this router owns both /api/orders/* and
   // /api/users/:userId/orders.
   app.use('/api', ordersRouter);
+  // Also /api: these hang off /api/orders/:id, and keeping them in their own file
+  // keeps the money path readable without splitting the URL space.
+  app.use('/api', paymentsRouter);
 
   /**
    * Route index. Useful during development, and it documents what is not built
@@ -89,7 +126,7 @@ export function createApp(): Express {
   app.get('/', (req, res) => {
     res.json({
       service: SERVICE_NAME,
-      phase: 'backend-foundation',
+      phase: 'backend-payments',
       endpoints: {
         health: ['GET /health', 'GET /health/ready'],
         products: [
@@ -111,11 +148,24 @@ export function createApp(): Express {
           'GET /api/orders/:id/activity',
           'GET /api/users/:userId/orders',
         ],
+        payments: [
+          'POST /api/orders/:id/payment-link (requires { "approved": true })',
+          'GET /api/orders/:id/payment',
+          'POST /api/orders/:id/payment/refresh',
+        ],
+        webhooks: ['POST /api/webhooks/razorpay'],
       },
-      notImplementedYet: [
-        'POST /api/chat (needs the Claude + MCP layer)',
-        'POST /api/webhooks/razorpay (needs the payments layer)',
-      ],
+      // Reported so a developer can tell "the route is missing" from "the route is
+      // there and this deployment has no keys" without reading server logs. The
+      // flag only ever says whether credentials are present - never anything about
+      // what they are.
+      payments: {
+        configured: isRazorpayConfigured,
+        ...(isRazorpayConfigured
+          ? {}
+          : { note: 'Payment routes return 501 until the Razorpay environment variables are set.' }),
+      },
+      notImplementedYet: ['POST /api/chat (needs the Claude + MCP layer)'],
       requestId: req.requestId,
     });
   });
@@ -145,7 +195,16 @@ async function main(): Promise<void> {
     console.log(`\n${SERVICE_NAME}`);
     console.log(`  listening   http://localhost:${env.PORT}`);
     console.log(`  environment ${env.NODE_ENV}`);
-    console.log(`  health      http://localhost:${env.PORT}/health\n`);
+    console.log(`  health      http://localhost:${env.PORT}/health`);
+    // Whether keys exist, never what they are. A developer whose payment routes
+    // answer 501 should learn why from the boot log rather than by guessing.
+    console.log(
+      `  payments    ${
+        isRazorpayConfigured
+          ? 'Razorpay configured'
+          : `not configured (set ${RAZORPAY_ENV_VARS.join(', ')})`
+      }\n`,
+    );
   });
 
   // Report database reachability at boot without blocking the listen. Starting
@@ -153,15 +212,36 @@ async function main(): Promise<void> {
   // briefly unavailable cannot recover on its own, whereas one that starts
   // degraded and reports it through /health/ready can.
   void getReadiness().then((report) => {
-    if (report.checks.database.reachable) {
-      console.log(`  database    connected (${report.checks.database.latencyMs}ms)\n`);
-    } else {
-      console.warn(
-        `  database    NOT REACHABLE (${report.checks.database.error ?? 'unknown'}).\n` +
-          '              Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env,\n' +
-          '              and that supabase/migrations/001_initial_schema.sql has been run.\n',
-      );
+    const db = report.checks.database;
+
+    if (db.reachable) {
+      console.log(`  database    connected (${db.latencyMs}ms)\n`);
+      return;
     }
+
+    // Name the actual remedy rather than listing every possibility. The three
+    // first-run failures have nothing to do with each other, and printing all of
+    // them for each of them is how a startup warning gets ignored.
+    const remedy: Record<string, string> = {
+      not_migrated:
+        'The schema is missing. Run supabase/migrations/001_initial_schema.sql\n' +
+        '              in the Supabase SQL Editor (see README, "Database migration").',
+      not_seeded:
+        'The schema exists but products is empty. Run supabase/seed.sql\n' +
+        '              in the Supabase SQL Editor (see README, "Seed data").',
+      permission_denied:
+        'Connected, but the key was refused by RLS/grants. Confirm\n' +
+        '              SUPABASE_SERVICE_ROLE_KEY is the service-role key, not the anon key.',
+      timeout: 'Supabase did not answer within 3s. Check the project is not paused.',
+      unreachable:
+        'Could not reach Supabase at all. Check SUPABASE_URL and\n' +
+        '              that this machine has network access.',
+    };
+
+    console.warn(
+      `  database    NOT READY (${db.error ?? 'unknown'}).\n` +
+        `              ${remedy[db.error ?? ''] ?? 'Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.'}\n`,
+    );
   });
 
   // Finish in-flight requests before exiting, so a deploy does not sever a

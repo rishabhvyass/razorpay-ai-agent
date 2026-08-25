@@ -311,6 +311,79 @@ export async function getOrderByRazorpayOrderId(
   return data === null ? null : toPublicOrder(data);
 }
 
+/**
+ * Look up by Razorpay's payment-link id.
+ *
+ * The primary route in from a Payment Links webhook. A `payment_link.*` delivery
+ * names the link, and the link id is what we stored when we created it, so this is
+ * a stronger match than `reference_id` - which is a value we chose and sent, and
+ * therefore only as trustworthy as the delivery it arrived in.
+ *
+ * `razorpay_payment_link_id` is UNIQUE on the table, so this cannot return two
+ * orders for one link.
+ */
+export async function getOrderByRazorpayPaymentLinkId(
+  paymentLinkId: string,
+): Promise<PublicOrder | null> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select(ORDER_COLUMNS)
+    .eq('razorpay_payment_link_id', paymentLinkId)
+    .maybeSingle();
+
+  if (error !== null) {
+    throw fromPostgrestError(error, {
+      operation: 'getOrderByRazorpayPaymentLinkId',
+      notFoundCode: 'ORDER_NOT_FOUND',
+    });
+  }
+
+  return data === null ? null : toPublicOrder(data);
+}
+
+/**
+ * Read an order's `metadata` bag.
+ *
+ * Separate from `getOrderById` because `toPublicOrder` deliberately withholds this
+ * column - it is an open JSONB bag written by the service-role client, so exposing
+ * it wholesale over HTTP would leak whatever any later phase decided to put in it.
+ * The payments layer needs it for two things the orders table has no column for:
+ * the provider-issued payment URL, and a written failure reason.
+ *
+ * Returns `{}` for an order with no metadata and `null` when the order does not
+ * exist, so a caller can tell "nothing stored" from "no such order".
+ */
+export async function getOrderMetadata(id: string): Promise<Record<string, Json> | null> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('metadata')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error !== null) {
+    throw fromPostgrestError(error, { operation: 'getOrderMetadata', notFoundCode: 'ORDER_NOT_FOUND' });
+  }
+
+  if (data === null) return null;
+
+  const { metadata } = data;
+
+  // The column is NOT NULL DEFAULT '{}', but it is typed as Json, so an array or a
+  // scalar is representable. Anything that is not a plain object is treated as
+  // absent rather than spread into a patch, where it would corrupt the bag.
+  if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return {};
+  }
+
+  // `Json` object values are `Json | undefined`; strip the undefined so the result
+  // can be spread into a new metadata object without reintroducing holes.
+  const entries = Object.entries(metadata).filter(
+    (entry): entry is [string, Json] => entry[1] !== undefined,
+  );
+
+  return Object.fromEntries(entries);
+}
+
 export async function getOrderByIdempotencyKey(key: string): Promise<PublicOrder | null> {
   const row = await getOrderRowByIdempotencyKey(key);
   return row === null ? null : toPublicOrder(row);

@@ -1,13 +1,19 @@
-# Checkout Concierge — Backend Foundation
+# Checkout Concierge — Backend
 
 An AI Growth & Agentic Commerce demo built for the Razorpay AI Builder Internship.
 
-> **Phase status.** This repository currently contains the **database and backend
-> foundation only**. There is no Claude client, no MCP server, and no Razorpay
-> integration yet — deliberately. Those layers all depend on the order state machine
-> and the audit trail being correct, and both are far cheaper to fix now than after
-> four layers have been built on top of them. See
+> **Phase status.** Built and working: the database schema, the repository layer, the
+> products / conversations / orders API, and the **Razorpay Test Mode payments path** —
+> payment links, a signature-verified webhook receiver, and reconciliation.
+>
+> Not built yet: the **Claude client, AgentRouter and MCP server**, and with them
+> `POST /api/chat`. The agent layer was deliberately left for last, because it depends
+> on the order state machine and the audit trail being correct, and both are far cheaper
+> to fix before four layers sit on top of them. See
 > [What is deliberately not built yet](#what-is-deliberately-not-built-yet).
+>
+> A web client lives in [`../frontend/Web`](../frontend/Web) (Vite + React 19) and talks
+> to this API. It has its own README.
 
 ---
 
@@ -49,8 +55,9 @@ properties actually working.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  CLIENTS                                            (not built yet)  │
-│  React Native app  ·  Next.js dashboard  ·  Telegram bot            │
+│  CLIENTS                                                             │
+│  Vite + React web app (../frontend/Web)          ← built             │
+│  React Native app  ·  Telegram bot               (not built yet)     │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │  HTTPS + X-Request-ID
 ┌──────────────────────────────▼───────────────────────────────────────┐
@@ -59,30 +66,30 @@ properties actually working.
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
 ╔══════════════════════════════▼═══════════════════════════════════════╗
-║  BACKEND FOUNDATION                                  ← THIS PHASE    ║
+║  BACKEND                                             ← THIS PHASE    ║
 ║                                                                      ║
 ║  Express app (src/server.ts)                                         ║
-║    requestId → cors → json → routers → notFound → errorHandler       ║
+║    requestId → cors → raw(webhooks) → json → routers → errorHandler  ║
 ║                                                                      ║
 ║  Routes            src/api/         health · products ·              ║
-║                                     conversations · orders           ║
+║                                     conversations · orders ·         ║
+║                                     payments · webhooks              ║
+║  Services          src/services/    paymentService (what a payment   ║
+║                                     state means) · razorpayClient    ║
 ║  Repositories      src/repositories/  the ONLY code that touches     ║
 ║                                       the database                   ║
 ║  Supabase clients  src/db/supabase.ts  anon (RLS) │ service (admin)  ║
 ║  Config            src/config/env.ts   validated at import, or exit  ║
-╚══════════════════════════════╤═══════════════════════════════════════╝
-                               │
-┌──────────────────────────────▼───────────────────────────────────────┐
-│  SUPABASE POSTGRES        Row Level Security enabled on all 7 tables │
-│                                                                      │
-│  profiles · products · conversations · messages                      │
-│  orders · agent_actions · payment_events                             │
-└──────────────────────────────────────────────────────────────────────┘
-                               ▲
-┌──────────────────────────────┴───────────────────────────────────────┐
-│  RAZORPAY (Test Mode)                               (not built yet)  │
-│  Orders API · Payment Links · signature-verified webhooks           │
-└──────────────────────────────────────────────────────────────────────┘
+╚═════════════╤════════════════════════════════════════╤═══════════════╝
+              │                                        │
+┌─────────────▼────────────────────────────┐  ┌────────▼──────────────┐
+│  SUPABASE POSTGRES                       │  │  RAZORPAY (Test Mode) │
+│  RLS enabled on all 7 tables             │  │  Payment Links API    │
+│                                          │  │  HMAC-signed webhooks │
+│  profiles · products · conversations     │◄─┤  → /api/webhooks/     │
+│  messages · orders · agent_actions       │  │       razorpay        │
+│  payment_events                          │  └───────────────────────┘
+└──────────────────────────────────────────┘
 ```
 
 ### The intended purchase flow
@@ -127,9 +134,11 @@ api/  →  repositories/  →  db/
 
 Routes never build queries. Repositories never handle HTTP. Nothing outside
 `config/env.ts` reads `process.env`. `src/repositories/orderRepo.ts` manages database
-state **only** — the Razorpay API calls that will accompany those state changes live in
-a payments layer that calls into it, which is what makes the money path testable
-without a network.
+state **only** — the Razorpay API calls live one layer up, in
+`src/services/razorpayClient.ts` (HTTP to Razorpay, nothing else) and
+`src/services/paymentService.ts` (what a payment state *means*, and which order
+transition it implies). That split is what makes the money path testable without a
+network: `decideNextStatus()` is a pure function over a provider state.
 
 ---
 

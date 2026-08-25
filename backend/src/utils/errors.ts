@@ -24,9 +24,18 @@ export const ERROR_CODES = [
   // 400
   'VALIDATION_ERROR',
   'INVALID_UUID',
+  // The HMAC over the raw webhook body did not match the X-Razorpay-Signature
+  // header. Deliberately its own code rather than VALIDATION_ERROR: this is a
+  // failed authentication, not a malformed field, and it is the one webhook
+  // outcome worth alerting on.
+  'INVALID_WEBHOOK_SIGNATURE',
   // 401 / 403
   'UNAUTHENTICATED',
   'FORBIDDEN',
+  // A money action was requested without the explicit approval that gates it.
+  // Distinct from FORBIDDEN, which is about who you are; this is about what you
+  // did not say yes to.
+  'APPROVAL_REQUIRED',
   // 404
   'NOT_FOUND',
   'PRODUCT_NOT_FOUND',
@@ -42,10 +51,21 @@ export const ERROR_CODES = [
   // same key will never succeed and a new key is required.
   'IDEMPOTENCY_KEY_REUSED',
   'INVALID_STATE_TRANSITION',
-  // 500 / 503
+  // The provider reported a settled payment whose amount or currency does not
+  // match the order it claims to settle. Never resolved by trusting the provider
+  // figure - the order is left unpaid and the discrepancy is recorded.
+  'PAYMENT_AMOUNT_MISMATCH',
+  // 500 / 501 / 502 / 503
   'INTERNAL_ERROR',
   'DATABASE_ERROR',
   'NOT_IMPLEMENTED',
+  // No Razorpay credentials are configured, so the payment routes have nothing to
+  // call. A deployment fault, not a caller fault, which is why it is 501 and not
+  // a 400 blaming the request.
+  'PAYMENT_NOT_CONFIGURED',
+  // Razorpay was reached and answered with something we cannot act on. 502: the
+  // failure is upstream, and a client retry may well succeed.
+  'PAYMENT_PROVIDER_ERROR',
   'SERVICE_UNAVAILABLE',
 ] as const;
 
@@ -116,8 +136,47 @@ export const conflict = (
 export const notImplemented = (message: string): AppError =>
   new AppError(501, 'NOT_IMPLEMENTED', message);
 
+/**
+ * Payments are unconfigured, so a payment route has nothing to call.
+ *
+ * 501 alongside NOT_IMPLEMENTED because the shape of the answer is the same - the
+ * capability is absent, and no request the caller could make will change that. The
+ * separate code lets a client distinguish "this feature was never built" from
+ * "this deployment has not been given keys", which have different fixes.
+ */
+export const paymentNotConfigured = (
+  message: string,
+  details?: Record<string, unknown>,
+): AppError => new AppError(501, 'PAYMENT_NOT_CONFIGURED', message, { details });
+
+/**
+ * A money action was requested without the explicit yes that gates it.
+ *
+ * 403 rather than 400: the request is well-formed and understood, and it was
+ * refused on purpose. A 400 would read as "fix your payload", which invites a
+ * caller to keep trying variations of it.
+ */
+export const approvalRequired = (
+  message: string,
+  details?: Record<string, unknown>,
+): AppError => new AppError(403, 'APPROVAL_REQUIRED', message, { details });
+
 export const internal = (message = 'Internal server error', cause?: unknown): AppError =>
   new AppError(500, 'INTERNAL_ERROR', message, { cause });
+
+/**
+ * An upstream provider failed.
+ *
+ * `cause` is where the provider's own response goes - it is kept for server logs
+ * and never serialised, because upstream error text is a well-known place for
+ * credentials, internal ids and account detail to leak. `message` must be written
+ * by us, the same rule `fromPostgrestError` follows below.
+ */
+export const badGateway = (
+  code: ErrorCode,
+  message: string,
+  options?: { details?: Record<string, unknown>; cause?: unknown },
+): AppError => new AppError(502, code, message, options);
 
 export const serviceUnavailable = (message: string, cause?: unknown): AppError =>
   new AppError(503, 'SERVICE_UNAVAILABLE', message, { cause });
@@ -143,9 +202,10 @@ export interface PostgrestLikeError {
  * offending values.
  *
  * SQLSTATE reference: 23505 unique_violation, 23503 foreign_key_violation,
- * 23514 check_violation, 23502 not_null_violation, 22P02 invalid_text_representation,
- * 22003 numeric_value_out_of_range, 42501 insufficient_privilege (which is how an
- * RLS denial surfaces), PGRST116 "no rows returned for a single-row request".
+ * 23001 restrict_violation, 23514 check_violation, 23502 not_null_violation,
+ * 22P02 invalid_text_representation, 22003 numeric_value_out_of_range,
+ * 42501 insufficient_privilege (which is how an RLS denial surfaces),
+ * PGRST116 "no rows returned for a single-row request".
  */
 export function fromPostgrestError(
   error: PostgrestLikeError,
@@ -160,6 +220,15 @@ export function fromPostgrestError(
 
     case '23503':
       return badRequest('VALIDATION_ERROR', 'A referenced record does not exist.');
+
+    // 23001 restrict_violation. Distinct from 23503, and easy to miss: an
+    // ON DELETE RESTRICT refusal raises 23001, NOT foreign_key_violation. It
+    // reaches here when something tries to delete a row another row still points
+    // at - orders.product_id is declared RESTRICT precisely so a sold product
+    // cannot vanish from underneath an order. That is the constraint working, so
+    // it is a 409, not the 500 the default arm would have produced.
+    case '23001':
+      return conflict('CONFLICT', 'That record is still referenced and cannot be removed.');
 
     case '23514':
     case '23502':

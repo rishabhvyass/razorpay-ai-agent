@@ -37,7 +37,29 @@ const requiredSecret = (label: string) =>
       .min(20, `${label} looks too short to be a real key - re-copy it from the Supabase dashboard`),
   );
 
-const envSchema = z.object({
+/**
+ * A credential the server can run without.
+ *
+ * Unset is legitimate here, which is why these are not `requiredSecret`: the
+ * database layer and every read route work with no payment provider configured,
+ * and refusing to boot without one would mean nobody could run the catalogue
+ * locally. The routes that need a key report their own absence instead - see
+ * `isRazorpayConfigured` below and api/payments.ts.
+ *
+ * `minLength` still applies when a value IS present, so a truncated paste fails
+ * at boot rather than as a 401 from the provider on the first customer.
+ */
+const optionalSecret = (label: string, minLength = 16) =>
+  z.preprocess(
+    blankToUndefined,
+    z
+      .string()
+      .min(minLength, `${label} looks too short to be a real value - re-copy it`)
+      .optional(),
+  );
+
+const envSchema = z
+  .object({
   /** e.g. https://abcdefghijklmnop.supabase.co */
   SUPABASE_URL: z.preprocess(
     blankToUndefined,
@@ -70,7 +92,98 @@ const envSchema = z.object({
     blankToUndefined,
     z.enum(['development', 'test', 'production']).default('development'),
   ),
-});
+
+  // ---------------------------------------------------------------------------
+  // Razorpay
+  //
+  // All three or none - enforced by the superRefine below. A half-configured
+  // provider is the one genuinely dangerous state: with a key id and no webhook
+  // secret the server can create payment links and take money, then be unable to
+  // verify the confirmation that says the money arrived. It would have to either
+  // trust an unauthenticated POST or leave every paid order stuck unpaid.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Publishable key id, e.g. `rzp_test_XXXXXXXXXXXXXX`. Not a secret in the way
+   * the two below are - it is designed to appear in Razorpay's own checkout - but
+   * it is still not sent to our browser bundle, because nothing in this design
+   * needs it there. Payment Links are opened by URL; no client SDK is loaded.
+   */
+  RAZORPAY_KEY_ID: optionalSecret('RAZORPAY_KEY_ID'),
+
+  /**
+   * BACKEND ONLY. Half of the Basic-auth pair that can create payment links and
+   * read payments on the account. Never log it, never return it, never put it in
+   * an error message.
+   */
+  RAZORPAY_KEY_SECRET: optionalSecret('RAZORPAY_KEY_SECRET'),
+
+  /**
+   * BACKEND ONLY. Chosen by you when creating the webhook in the Razorpay
+   * dashboard, not issued by Razorpay. Every inbound delivery is HMAC-SHA256'd
+   * with this over the raw request body; without it, `POST /api/webhooks/razorpay`
+   * would be an unauthenticated endpoint that marks orders PAID.
+   */
+  RAZORPAY_WEBHOOK_SECRET: optionalSecret('RAZORPAY_WEBHOOK_SECRET', 8),
+
+  // ---------------------------------------------------------------------------
+  // AgentRouter
+  // ---------------------------------------------------------------------------
+
+  /**
+   * DECLARED BUT NOT YET CONSUMED.
+   *
+   * The Claude + MCP layer behind `POST /api/chat` is a separate build; no code
+   * reads this today. The slot exists so the key can be set now and so its name
+   * is documented in one place rather than guessed at later.
+   *
+   * BACKEND ONLY when it is used. A model credential in a browser bundle is a
+   * billable resource anyone can spend.
+   */
+  AGENTROUTER_API_KEY: optionalSecret('AGENTROUTER_API_KEY'),
+  })
+  .superRefine((value, ctx) => {
+    // Report against each missing variable's own path, so the boot-time report
+    // below names exactly what to add rather than describing the group.
+    const razorpay = {
+      RAZORPAY_KEY_ID: value.RAZORPAY_KEY_ID,
+      RAZORPAY_KEY_SECRET: value.RAZORPAY_KEY_SECRET,
+      RAZORPAY_WEBHOOK_SECRET: value.RAZORPAY_WEBHOOK_SECRET,
+    };
+
+    const present = Object.entries(razorpay).filter(([, v]) => v !== undefined);
+
+    if (present.length > 0 && present.length < 3) {
+      for (const [key, v] of Object.entries(razorpay)) {
+        if (v === undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message:
+              'Razorpay is partly configured. Set all three of RAZORPAY_KEY_ID, ' +
+              'RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET, or none of them.',
+          });
+        }
+      }
+    }
+
+    // A live key against a development database would create real payment links
+    // that charge real cards, and settle them against seed data. Test mode is not
+    // the safe default here - it is the only correct one outside production.
+    if (
+      value.RAZORPAY_KEY_ID !== undefined &&
+      value.NODE_ENV !== 'production' &&
+      !value.RAZORPAY_KEY_ID.startsWith('rzp_test_')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RAZORPAY_KEY_ID'],
+        message:
+          `NODE_ENV is '${value.NODE_ENV}', so RAZORPAY_KEY_ID must be a test-mode key ` +
+          "(it starts with 'rzp_test_'). A live key here would charge real cards.",
+      });
+    }
+  });
 
 type Env = z.infer<typeof envSchema>;
 
@@ -92,8 +205,9 @@ function loadEnv(): Env {
         '',
         problems,
         '',
-        'Fix: copy .env.example to .env and fill in the values from',
-        'Supabase Dashboard -> Project Settings -> API.',
+        'Fix: copy .env.example to .env and fill in the values. Supabase keys come',
+        'from Supabase Dashboard -> Project Settings -> API; Razorpay keys from',
+        'Razorpay Dashboard -> Settings -> API Keys, in Test Mode.',
         '',
       ].join('\n'),
     );
@@ -107,3 +221,43 @@ export const env: Env = loadEnv();
 
 export const isProduction = env.NODE_ENV === 'production';
 export const isDevelopment = env.NODE_ENV === 'development';
+
+/**
+ * Razorpay credentials, or null when the provider is not configured.
+ *
+ * Shaped as one nullable object rather than three optional strings so a single
+ * null check narrows all three to `string` for callers. Without it every call
+ * site would need its own non-null assertion, and an assertion is exactly the
+ * thing that outlives the invariant it assumed.
+ *
+ * The all-or-nothing rule in the schema above is what makes this sound: there is
+ * no state in which one of these is set and another is not.
+ */
+export const razorpayConfig: {
+  readonly keyId: string;
+  readonly keySecret: string;
+  readonly webhookSecret: string;
+} | null =
+  env.RAZORPAY_KEY_ID !== undefined &&
+  env.RAZORPAY_KEY_SECRET !== undefined &&
+  env.RAZORPAY_WEBHOOK_SECRET !== undefined
+    ? {
+        keyId: env.RAZORPAY_KEY_ID,
+        keySecret: env.RAZORPAY_KEY_SECRET,
+        webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
+      }
+    : null;
+
+export const isRazorpayConfigured = razorpayConfig !== null;
+
+/**
+ * The variable names a caller must set to enable payments.
+ *
+ * Names only. Printed in a 501 response body, so it must never become values -
+ * the same rule the boot-time report above follows.
+ */
+export const RAZORPAY_ENV_VARS = [
+  'RAZORPAY_KEY_ID',
+  'RAZORPAY_KEY_SECRET',
+  'RAZORPAY_WEBHOOK_SECRET',
+] as const;

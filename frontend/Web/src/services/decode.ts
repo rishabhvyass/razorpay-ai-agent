@@ -43,11 +43,38 @@ import type {
 } from '@/types';
 
 /**
+ * Exactly what the backend's payment routes return - a PaymentView minus `mock`.
+ *
+ * Declared here rather than in @/types because it describes a wire shape, and this
+ * file is where wire shapes are pinned to the serialisers that produce them.
+ */
+export interface BackendPaymentView {
+  order: Order;
+  paymentUrl: string | null;
+  razorpayOrderId: string | null;
+  paymentLinkId: string | null;
+  paymentId: string | null;
+  failureReason: string | null;
+}
+
+/**
  * `'unknown'` means "must be present, may hold anything" - the JSONB bags. It is
  * not the same as optional: a missing key is still a mismatch, because the server
  * always serialises it.
  */
-type Kind = 'string' | 'number' | 'boolean' | 'string|null' | 'unknown' | { oneOf: readonly string[] };
+type Kind =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'string|null'
+  | 'unknown'
+  | { oneOf: readonly string[] }
+  /**
+   * A nested object that must itself match a shape. Checked recursively, and the
+   * child's complaints are reported prefixed with the parent key, so a renamed
+   * field three levels down still names its own path rather than "order is wrong".
+   */
+  | { shape: Shape };
 
 type Shape = Readonly<Record<string, Kind>>;
 
@@ -110,6 +137,28 @@ const ORDER: Shape = {
   updatedAt: 'string',
 };
 
+/**
+ * backend/src/services/paymentService.ts -> PaymentView
+ *
+ * `mock` is NOT in this shape, and the omission is deliberate. The backend has no
+ * business reporting whether the frontend is running a mock; provenance is the
+ * frontend's own concern. paymentService.ts sets it to false when it builds a view
+ * from one of these, and to true when the value came from the local overlay.
+ *
+ * `order` is checked against the full ORDER shape rather than waved through as
+ * 'unknown'. This response is the one place a payment amount and a payment status
+ * arrive together, so a silently-renamed field here is the single most expensive
+ * shape drift in the app.
+ */
+const PAYMENT_VIEW: Shape = {
+  order: { shape: ORDER },
+  paymentUrl: 'string|null',
+  razorpayOrderId: 'string|null',
+  paymentLinkId: 'string|null',
+  paymentId: 'string|null',
+  failureReason: 'string|null',
+};
+
 /** backend/src/repositories/agentActionRepo.ts -> PublicAgentAction */
 const AGENT_ACTION: Shape = {
   id: 'string',
@@ -151,6 +200,18 @@ function problems(value: unknown, shape: Shape): string[] {
     const actual = record[key];
 
     if (kind === 'unknown') continue;
+
+    if (typeof kind === 'object' && 'shape' in kind) {
+      // "order.amount should be a number" for a field problem, "order expected a
+      // JSON object" when the nested value is not an object at all. Both read as
+      // sentences; a blanket `key.problem` would produce "order.expected a JSON".
+      found.push(
+        ...problems(actual, kind.shape).map((problem) =>
+          problem.startsWith('expected ') ? `${key} ${problem}` : `${key}.${problem}`,
+        ),
+      );
+      continue;
+    }
 
     if (typeof kind === 'object') {
       if (typeof actual !== 'string' || !kind.oneOf.includes(actual)) {
@@ -242,6 +303,15 @@ export const decodeMessages = (value: unknown): Message[] => many<Message>(value
 
 export const decodeOrder = (value: unknown): Order => one<Order>(value, ORDER, 'order');
 export const decodeOrders = (value: unknown): Order[] => many<Order>(value, ORDER, 'order');
+
+/**
+ * `GET /api/orders/:id/payment`, `POST /api/orders/:id/payment-link`,
+ * `POST /api/orders/:id/payment/refresh` - all three answer this shape.
+ *
+ * Returned as the backend's half of a PaymentView; the caller adds `mock`.
+ */
+export const decodeBackendPaymentView = (value: unknown): BackendPaymentView =>
+  one<BackendPaymentView>(value, PAYMENT_VIEW, 'payment');
 
 export const decodeAgentActions = (value: unknown): AgentAction[] =>
   many<AgentAction>(value, AGENT_ACTION, 'agent action');

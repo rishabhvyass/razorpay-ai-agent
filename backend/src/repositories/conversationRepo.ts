@@ -12,7 +12,7 @@
  */
 
 import { supabaseAdmin } from '../db/supabase.js';
-import type { ConversationRow, ConversationStatus, Json } from '../db/types.js';
+import type { ConversationRow, ConversationStatus } from '../db/types.js';
 import { fromPostgrestError, internal } from '../utils/errors.js';
 
 const CONVERSATION_COLUMNS = 'id, user_id, status, created_at, updated_at';
@@ -39,7 +39,12 @@ export interface CreateConversationInput {
   /** Null/omitted for an anonymous session. */
   userId?: string | null | undefined;
   status?: ConversationStatus | undefined;
-  metadata?: Json | undefined;
+  // No `metadata` field, deliberately: public.conversations has no metadata
+  // column. It was declared here once and silently dropped on insert, which is
+  // worse than not accepting it - a caller would have had no way to notice.
+  // Per-turn context belongs on messages.metadata; per-purchase context on
+  // orders.metadata. If conversation-level metadata is ever genuinely needed, it
+  // needs a migration first.
 }
 
 export async function createConversation(

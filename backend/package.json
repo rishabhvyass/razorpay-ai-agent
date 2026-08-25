@@ -11,7 +11,14 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && npm run test:logic && npm run test:http && npm run test:http:prod",
+    "test:logic": "node scripts/smoke-logic.mjs",
+    "test:http": "node scripts/smoke-http.mjs",
+    "test:http:prod": "node scripts/smoke-http.mjs --prod",
+    "test:schema": "node scripts/verify-schema-pglite.mjs",
+    "verify:live": "node scripts/verify-live.mjs",
+    "survey:live": "node scripts/survey-live.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.3",

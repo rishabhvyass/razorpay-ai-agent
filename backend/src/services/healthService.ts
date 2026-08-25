@@ -61,12 +61,23 @@ export function getLiveness(): LivenessReport {
 const DB_CHECK_TIMEOUT_MS = 3_000;
 
 /**
- * Cheapest possible proof that Supabase is reachable and this project's
- * credentials work: a HEAD-style count against `products` with no rows returned.
+ * Prove that Supabase is reachable, the credentials work, the migration has run,
+ * and the catalogue is seeded.
  *
- * It exercises the whole path - DNS, TLS, PostgREST, auth, Postgres - without
- * transferring data, and `products` is chosen because it always has rows after
- * seeding, so an empty result is a real signal rather than a normal state.
+ * This deliberately does NOT use `{ count: 'exact', head: true }`, which is the
+ * obvious way to write it and is silently useless. A head request gets HTTP 204
+ * with no body, and PostgREST has nowhere to put an error in a bodyless response,
+ * so supabase-js reports `error: null` for a table that does not exist. Verified
+ * against this project: a head-count on `products` and on `totally_made_up_xyz`
+ * both return 204 / error null / count null. A readiness probe built on that
+ * answers "ok" for a database with no schema at all - the single state this phase
+ * is most likely to be in - and `count` is always null anyway, because the number
+ * travels in a Content-Range header that a 204 does not carry.
+ *
+ * So: a real one-row select. It costs one id over the wire and it can actually
+ * fail, which is the entire job. The outcomes are reported distinctly, because
+ * "cannot reach Supabase" and "reached it, but nobody ran the migration" need
+ * different fixes and a probe that conflates them sends you to the wrong one.
  */
 async function checkDatabase(): Promise<DependencyReport> {
   const startedAt = process.hrtime.bigint();
@@ -74,7 +85,7 @@ async function checkDatabase(): Promise<DependencyReport> {
   const elapsedMs = (): number => Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 
   try {
-    const query = supabaseAdmin.from('products').select('id', { count: 'exact', head: true });
+    const query = supabaseAdmin.from('products').select('id').limit(1);
 
     // supabase-js has no per-request timeout, and an unreachable host can hang for
     // the OS TCP timeout - long enough for a readiness probe to time out first and
@@ -86,7 +97,7 @@ async function checkDatabase(): Promise<DependencyReport> {
       ).unref(); // do not hold the event loop open on shutdown
     });
 
-    const { error } = await Promise.race([query, timeout]);
+    const { data, error } = await Promise.race([query, timeout]);
 
     if (error !== null) {
       return {
@@ -94,7 +105,17 @@ async function checkDatabase(): Promise<DependencyReport> {
         latencyMs: Math.round(elapsedMs()),
         // Classify, do not forward. A PostgREST error message can quote schema
         // details, and an auth failure message can hint at key shape.
-        error: error.code === '42501' ? 'permission_denied' : 'query_failed',
+        error: classifyDbError(error.code),
+      };
+    }
+
+    if (data === null || data.length === 0) {
+      // Schema is present and readable, but the catalogue is empty. Not "ok":
+      // every product route would return [] and the demo has nothing to sell.
+      return {
+        reachable: false,
+        latencyMs: Math.round(elapsedMs()),
+        error: 'not_seeded',
       };
     }
 
@@ -106,6 +127,25 @@ async function checkDatabase(): Promise<DependencyReport> {
       latencyMs: Math.round(elapsedMs()),
       error: isTimeout ? 'timeout' : 'unreachable',
     };
+  }
+}
+
+/**
+ * Map a PostgREST code to a caller-safe classification.
+ *
+ * PGRST205 is "table not in the schema cache", which in practice means the
+ * migration has not been applied - by far the most common first-run failure, and
+ * worth naming rather than folding into a generic query failure.
+ */
+function classifyDbError(code: string | null | undefined): string {
+  switch (code) {
+    case 'PGRST205':
+    case '42P01': // undefined_table
+      return 'not_migrated';
+    case '42501':
+      return 'permission_denied';
+    default:
+      return 'query_failed';
   }
 }
 
