@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { CreditCard, Info } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { useCheckoutSession } from '@/hooks/useCheckoutSession';
 import { config } from '@/lib/config';
+import { qk } from '@/lib/queryClient';
+import { refreshPaymentStatus } from '@/services/paymentService';
 import { Badge, Card, CardHeader, ErrorState, MockBadge, SkeletonText } from '@/components/ui';
 import {
   ORDER_STATUS_PRESENTATION,
@@ -47,9 +50,12 @@ export function PaymentCard({
 }) {
   const session = useCheckoutSession();
   const payment = usePaymentStatus(orderId);
+  const queryClient = useQueryClient();
 
   const [simulateError, setSimulateError] = useState<unknown>(null);
   const [simulating, setSimulating] = useState(false);
+  const [reconcileError, setReconcileError] = useState<unknown>(null);
+  const [reconciling, setReconciling] = useState(false);
 
   const order = payment.data?.order ?? fallbackOrder;
   const paymentUrl = payment.data?.paymentUrl ?? fallbackPaymentUrl ?? null;
@@ -69,6 +75,39 @@ export function PaymentCard({
       setSimulateError(error);
     } finally {
       setSimulating(false);
+    }
+  };
+
+  /**
+   * Ask the backend to read this payment's state from Razorpay and apply it.
+   *
+   * Necessary rather than convenient: a webhook cannot reach a machine with no public
+   * URL, so in local development this is the only way a genuinely paid order becomes
+   * PAID. In a deployment it is the reconciliation path for a delivery that never
+   * arrived, because an order stuck at PAYMENT_PENDING is not evidence nobody paid.
+   *
+   * It is not a way to make a payment succeed. The request body carries nothing - just
+   * an order id in the URL - and every value it writes comes back from the provider
+   * inside the handler. Pressing it repeatedly produces exactly what an honest client
+   * gets: whatever Razorpay says.
+   *
+   * The response is written straight into the poll's cache key rather than triggering
+   * another fetch, because it IS the fresher read; refetching afterwards would show
+   * the same row a beat later.
+   */
+  const reconcile = async () => {
+    if (!order || reconciling) return;
+    setReconciling(true);
+    setReconcileError(null);
+    try {
+      const view = await refreshPaymentStatus(order.id);
+      queryClient.setQueryData(qk.orders.payment(order.id), view);
+      void queryClient.invalidateQueries({ queryKey: qk.orders.detail(order.id) });
+      onRefresh?.();
+    } catch (error) {
+      setReconcileError(error);
+    } finally {
+      setReconciling(false);
     }
   };
 
@@ -138,10 +177,19 @@ export function PaymentCard({
               // OrderDetailPage previously passed only its `qk.orders.detail` refetch,
               // which is a different key from the `qk.orders.payment` rendered here, so
               // pressing the button changed nothing visible on this card.
+              // In real mode a re-check asks Razorpay, not the database: the point of
+              // the button is the provider's verdict, and re-reading a row this app
+              // already polls every three seconds would tell the user nothing new. In
+              // mock mode there is no provider, so it refetches.
               onRecheck={() => {
-                void payment.refetch();
-                onRefresh?.();
+                if (isMock) {
+                  void payment.refetch();
+                  onRefresh?.();
+                  return;
+                }
+                void reconcile();
               }}
+              rechecking={reconciling}
             />
           ) : order.status === 'PENDING_CONFIRMATION' && !isMock ? (
             // The order exists and nothing has been initiated against it. That is all
@@ -149,14 +197,14 @@ export function PaymentCard({
             // is offered for a payment that was never started.
             <div className="space-y-3">
               <Badge tone="neutral" icon={<Info className="size-3" aria-hidden />}>
-                {config.useMock ? 'No payment link issued' : 'Payments layer not implemented'}
+                No payment link issued
               </Badge>
               <p className="text-muted text-[13px] leading-relaxed">
                 The order is recorded in the database at{' '}
                 <code className="text-ink">PENDING_CONFIRMATION</code>.{' '}
                 {config.useMock
                   ? 'No simulated payment link exists for it in this browser — the local overlay was reset, or the order was created before it. Nothing was charged, and there is no payment here to settle.'
-                  : 'Creating the Razorpay order and issuing a payment link happen server-side, and those endpoints have not shipped yet — so no link was created and nothing was charged.'}
+                  : 'No Razorpay payment link has been issued against it, so nothing has been charged. A link is only created when a purchase is explicitly authorised, and the backend refuses to issue one without that approval.'}
               </p>
             </div>
           ) : (
@@ -167,6 +215,13 @@ export function PaymentCard({
               simulateError={simulateError}
               simulating={simulating}
               {...(isMock ? { onSimulate: (outcome) => void simulate(outcome) } : {})}
+              {...(isMock || config.useMock
+                ? {}
+                : {
+                    onReconcile: () => void reconcile(),
+                    reconciling,
+                    reconcileError,
+                  })}
             />
           )}
         </div>

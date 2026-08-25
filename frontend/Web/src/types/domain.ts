@@ -146,7 +146,7 @@ export interface Message {
  *
  *   idempotency_key - a caller-chosen dedup token. Echoing it back would let one
  *                     client discover another caller's key.
- *   metadata        - an open JSONB bag the payments layer will fill with provider
+ *   metadata        - an open JSONB bag the payments layer fills with provider
  *                     detail, read through a service-role query. Not safe to expose
  *                     wholesale.
  *

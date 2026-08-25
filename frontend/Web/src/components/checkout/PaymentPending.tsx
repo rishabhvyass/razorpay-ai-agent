@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ExternalLink, Hourglass, Info, Loader2 } from 'lucide-react';
+import { ExternalLink, Hourglass, Info, Loader2, RefreshCw } from 'lucide-react';
 import { Badge, Button, ErrorState, MockNotice } from '@/components/ui';
 import { AGENT_PHASE_LABEL } from '@/hooks/useCheckoutSession';
 import { PaymentSteps } from './PaymentSteps';
@@ -24,6 +24,9 @@ export function PaymentPending({
   onSimulate,
   simulateError,
   simulating = false,
+  onReconcile,
+  reconcileError,
+  reconciling = false,
 }: {
   order: Order;
   paymentUrl: string | null;
@@ -33,6 +36,15 @@ export function PaymentPending({
   /** A settlement attempt that failed. Surfaced rather than swallowed. */
   simulateError?: unknown;
   simulating?: boolean;
+  /**
+   * Real mode only. Asks the backend to read this payment's state from Razorpay and
+   * apply whatever the provider reports. It cannot make a payment succeed - it carries
+   * no payment information, only the order id - which is why offering it here is not a
+   * back door into the status the rest of this component refuses to fabricate.
+   */
+  onReconcile?: () => void;
+  reconcileError?: unknown;
+  reconciling?: boolean;
 }) {
   // A leading slash means the link is this app's simulated checkout route. Anything
   // else is a provider-issued URL and must open in its own tab.
@@ -89,12 +101,40 @@ export function PaymentPending({
         <div className="rounded-control border-line bg-surface-sunken flex items-start gap-2.5 border px-3 py-2.5">
           <Info className="text-muted mt-0.5 size-3.5 shrink-0" aria-hidden />
           <p className="text-muted text-xs leading-relaxed">
-            No payment link has been issued. Razorpay order creation and payment links live in the
-            backend's payments layer, which is not implemented yet, so this app did not construct a
-            link of its own.
+            No payment link has been issued for this order, so there is nothing to pay yet and
+            nothing has been charged. Razorpay issues the link server-side when a purchase is
+            authorised; this app never constructs one of its own.
           </p>
         </div>
       )}
+
+      {onReconcile ? (
+        <div className="space-y-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onReconcile}
+            loading={reconciling}
+            icon={<RefreshCw className="size-3.5" aria-hidden />}
+            fullWidth
+          >
+            Check with Razorpay
+          </Button>
+          <p className="text-faint text-[11px] leading-relaxed">
+            Reads this payment link&apos;s state from Razorpay and applies what the provider
+            reports. Worth pressing if the backend is running locally, where Razorpay has no public
+            URL to deliver its webhook to. It cannot make a payment succeed: the status that appears
+            is the provider&apos;s answer, whatever that is.
+          </p>
+          {reconciling ? (
+            <p className="text-muted text-[12px]" role="status" aria-live="polite">
+              {AGENT_PHASE_LABEL['verifying-payment']}: asking Razorpay what happened to this
+              payment.
+            </p>
+          ) : null}
+          {reconcileError ? <ErrorState error={reconcileError} compact /> : null}
+        </div>
+      ) : null}
 
       {isMock && onSimulate ? (
         <div className="space-y-2">

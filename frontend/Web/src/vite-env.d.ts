@@ -16,7 +16,7 @@
 interface ImportMetaEnv {
   /** Backend origin. Empty in development - vite.config.ts proxies to :3000. */
   readonly VITE_API_URL?: string;
-  /** Serve the two unbuilt backend routes from src/services/mock/. */
+  /** Serve POST /api/chat, and the payment states, from src/services/mock/. */
   readonly VITE_USE_MOCK?: string;
 }
 

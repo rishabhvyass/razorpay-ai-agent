@@ -49,9 +49,9 @@ export function App() {
                 <Route path="activity" element={<ActivityPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 {/*
-                  Stands in for the unbuilt payments layer. The URL comes from the
-                  mock adapter, never from a provider - this app does not construct
-                  Razorpay links.
+                  The mock adapter's stand-in checkout, reachable only while
+                  VITE_USE_MOCK is on. Its URL comes from the mock adapter, never
+                  from a provider - this app does not construct Razorpay links.
                 */}
                 <Route path="mock-checkout/:orderId" element={<MockCheckoutPage />} />
                 <Route path="*" element={<NotFoundPage />} />

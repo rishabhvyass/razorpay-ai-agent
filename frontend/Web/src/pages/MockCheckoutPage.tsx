@@ -22,10 +22,13 @@ import { isTerminalStatus } from '@/services/orderService';
 /**
  * The simulated checkout.
  *
- * This route exists because the payments layer does not. `POST /api/webhooks/razorpay`
- * is listed in the backend's own not-implemented set, so there is no way for an order
- * to leave PENDING_CONFIRMATION on its own - and the Razorpay challenge specifically
- * asks for both a successful payment and a gracefully handled failure.
+ * Reachable only while VITE_USE_MOCK is on. The backend's payments layer is built -
+ * real Payment Links, a signature-verified `POST /api/webhooks/razorpay`, and a
+ * reconcile endpoint - so with the mock adapter off an order reaches PAID because
+ * Razorpay said so, and this page has no part in it. It stays because the flow has to
+ * be walkable with no keys configured, and because the Razorpay challenge asks for both
+ * a successful payment and a gracefully handled failure, on demand rather than by
+ * chance.
  *
  * Two things it deliberately is not:
  *
@@ -91,10 +94,10 @@ export function MockCheckoutPage() {
                   The simulated checkout is disabled
                 </h2>
                 <p className="text-muted text-[13px] leading-relaxed">
-                  This page only exists to stand in for the unbuilt payments layer while{' '}
+                  This page only stands in for the payment provider while{' '}
                   <code className="text-ink">VITE_USE_MOCK</code> is on. With the mock adapter off
-                  there is nothing honest for it to do — only a signature-verified Razorpay webhook
-                  can change an order's status, and this app has no way to produce one.
+                  there is nothing honest for it to do: the real payments layer runs instead, and
+                  only a signature-verified Razorpay webhook can change an order's status.
                 </p>
                 <Link to="/orders" className="text-accent inline-block text-[13px] font-medium">
                   Back to orders
@@ -134,10 +137,10 @@ export function MockCheckoutPage() {
     >
       <div className="mx-auto max-w-xl space-y-4">
         <MockNotice>
-          This is not Razorpay and not a payment. It exists because{' '}
-          <code>POST /api/webhooks/razorpay</code> is not implemented yet, so an order cannot reach a
-          paid or failed state on its own. Whichever button you press below writes that outcome to a
-          local, clearly-labelled overlay — no card is collected and no money moves.
+          This is not Razorpay and not a payment. The mock adapter is on, so no Razorpay order and
+          no payment link were ever created, and there is no provider here to confirm anything.
+          Whichever button you press below writes that outcome to a local, clearly-labelled
+          overlay: no card is collected and no money moves.
         </MockNotice>
 
         <Card padded={false} className="overflow-hidden">
@@ -277,8 +280,8 @@ export function MockCheckoutPage() {
 
         <p className="text-faint flex items-start gap-2 text-[11px] leading-relaxed">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          When the real payments layer lands, this route is deleted. The order page will observe the
-          same transition through the same poll against{' '}
+          Turn the mock adapter off and this route is unreachable. The order page observes the same
+          transition through the same poll against{' '}
           <code>GET /api/orders/:id</code> — written there by the verified webhook instead of by a
           button here.
         </p>

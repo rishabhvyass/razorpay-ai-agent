@@ -48,5 +48,4 @@ export const config = {
  */
 export const NOT_IMPLEMENTED_ENDPOINTS = [
   'POST /api/chat (needs the Claude + MCP layer)',
-  'POST /api/webhooks/razorpay (needs the payments layer)',
 ] as const;

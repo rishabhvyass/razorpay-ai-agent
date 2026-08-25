@@ -36,14 +36,18 @@ export function PaymentFailure({
   order,
   reason,
   onRecheck,
+  rechecking = false,
 }: {
   order: Order;
   reason: string | null;
   /**
-   * Re-reads the order from the backend. It cannot change a settled outcome, and
-   * it never re-submits a payment - it asks the server what the status is now.
+   * Asks the server what the status is now - in real mode by reconciling against
+   * Razorpay, which is the only source that could contradict this card. It cannot
+   * change a settled outcome and it never re-submits a payment.
    */
   onRecheck?: () => void;
+  /** True while that request is in flight, so the button is not silently inert. */
+  rechecking?: boolean;
 }) {
   const presentation = ORDER_STATUS_PRESENTATION[order.status];
 
@@ -77,6 +81,7 @@ export function PaymentFailure({
             variant="secondary"
             size="md"
             onClick={onRecheck}
+            loading={rechecking}
             icon={<RefreshCw className="size-3.5" aria-hidden />}
             className="sm:flex-1"
           >

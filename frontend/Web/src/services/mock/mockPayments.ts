@@ -1,15 +1,20 @@
 /**
- * Development fallback for the payment states the backend has not built.
+ * Development fallback for the payment states, used only when VITE_USE_MOCK is on.
  *
  * WHAT IS REAL HERE: nothing about the money. The order row itself is real -
  * `POST /api/orders` exists and writes PENDING_CONFIRMATION to Postgres. This
- * module overlays the states *after* that point, because the endpoints that would
- * produce them do not exist:
+ * module overlays the states *after* that point:
  *
- *   - Razorpay order creation      (payments layer, unbuilt)
- *   - payment link generation      (payments layer, unbuilt)
- *   - POST /api/webhooks/razorpay  (listed in the backend's own notImplementedYet)
- *   - any status transition at all (backend exposes none, deliberately)
+ *   - Razorpay order creation      (simulated)
+ *   - payment link generation      (simulated, and the URL is a local route)
+ *   - the settled outcome          (whichever button a reviewer pressed)
+ *
+ * All three are real on the backend now: POST /api/orders/:id/payment-link issues a
+ * genuine Payment Link behind an explicit approval, and POST /api/webhooks/razorpay
+ * verifies an HMAC before changing anything. This module remains so the flow is
+ * walkable with no Razorpay keys configured, and so the failure state is reachable on
+ * demand - not because the endpoints are missing. Turning the flag off routes every
+ * call that lands here to them instead.
  *
  * So the overlay is keyed by a real order id and is explicitly labelled wherever
  * it surfaces. `mock: true` travels with every value this module returns.

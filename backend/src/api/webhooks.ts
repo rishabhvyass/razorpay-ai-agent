@@ -140,8 +140,10 @@ function nonEmpty(value: string | null | undefined): string | null {
  * The amount is taken from what the provider says it COLLECTED - the link's
  * `amount_paid`, or the payment entity's `amount` - never from the link's `amount`,
  * which is the figure we asked for and therefore proves nothing about what arrived.
+ *
+ * Exported for scripts/smoke-logic.mjs, which asserts that last sentence directly.
  */
-function providerStateFromWebhook(body: WebhookBody): ProviderPaymentState {
+export function providerStateFromWebhook(body: WebhookBody): ProviderPaymentState {
   const link = body.payload.payment_link?.entity;
   const payment = body.payload.payment?.entity;
 
@@ -224,8 +226,11 @@ async function resolveOrder(body: WebhookBody): Promise<PublicOrder | null> {
  * The length check in front of it is required, not defensive: `timingSafeEqual`
  * throws on unequal lengths, and a thrown exception here would answer 500 to a
  * forged signature - which Razorpay's retry logic would then hammer.
+ *
+ * Exported for scripts/smoke-logic.mjs. It is pure, and it is the one function here
+ * worth testing directly - every property this file claims rests on it.
  */
-function verifySignature(rawBody: Buffer, signature: string, secret: string): boolean {
+export function verifySignature(rawBody: Buffer, signature: string, secret: string): boolean {
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
   const expectedBuffer = Buffer.from(expected, 'utf8');

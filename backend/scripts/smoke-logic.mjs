@@ -41,6 +41,10 @@ const { parseMajorToMinor, lineTotalMinor, formatMinorUnits, MAX_AMOUNT_MINOR } 
   '../dist/utils/money.js'
 );
 const { fromPostgrestError } = await import('../dist/utils/errors.js');
+const { decideNextStatus, providerStateFromLink } = await import(
+  '../dist/services/paymentService.js'
+);
+const { verifySignature, providerStateFromWebhook } = await import('../dist/api/webhooks.js');
 
 let pass = 0;
 let fail = 0;
@@ -285,6 +289,152 @@ console.log('\n=== 11. Price filters are clamped ===');
 
   const lim = await urlOf(() => searchProducts({ limit: 9999 }));
   check('limit clamped to 100 (offset 0..99)', calls[0].url.includes('offset=0'), lim);
+}
+
+console.log('\n=== 12. Payment outcome decisions (decideNextStatus) ===');
+{
+  // The decision table that stands between a provider event and a PAID order. Pure,
+  // so it is testable exactly as written - which matters more here than anywhere
+  // else in the codebase, because a wrong entry either loses a payment or invents one.
+  const state = (over = {}) => ({
+    linkStatus: null,
+    paymentStatus: null,
+    paymentId: null,
+    razorpayOrderId: null,
+    paidAmountMinor: null,
+    currency: null,
+    ...over,
+  });
+
+  const next = (over) => decideNextStatus(state(over)).next;
+
+  check('link paid -> PAID', next({ linkStatus: 'paid' }) === 'PAID', String(next({ linkStatus: 'paid' })));
+  check('payment captured -> PAID', next({ paymentStatus: 'captured' }) === 'PAID');
+  check('link expired -> PAYMENT_EXPIRED', next({ linkStatus: 'expired' }) === 'PAYMENT_EXPIRED');
+  check('link cancelled -> CANCELLED', next({ linkStatus: 'cancelled' }) === 'CANCELLED');
+  check('payment failed -> PAYMENT_FAILED', next({ paymentStatus: 'failed' }) === 'PAYMENT_FAILED');
+
+  // Everything below must decide NOTHING. Each one is a state that looks like
+  // progress and is not: an authorised-but-uncaptured payment is money on hold, a
+  // part-paid link is not a settled order, and a freshly created link is just a link.
+  check('link created -> no change', next({ linkStatus: 'created' }) === null);
+  check('payment authorized (not captured) -> no change',
+    next({ paymentStatus: 'authorized' }) === null,
+    String(next({ paymentStatus: 'authorized' })));
+  check('partially_paid -> no change', next({ linkStatus: 'partially_paid' }) === null);
+  check('empty state -> no change', next({}) === null);
+  check('unknown payment status -> no change', next({ paymentStatus: 'refunded' }) === null);
+
+  // A capture wins over a failure in the same payload. Razorpay sends a failed
+  // attempt alongside the successful retry on the same link, and reading the failure
+  // first would mark a paid order failed.
+  check('captured beats failed in one payload',
+    next({ linkStatus: 'paid', paymentStatus: 'failed' }) === 'PAID');
+
+  // The amount that gets compared to the order total. `link.amount` is OUR figure -
+  // taking it would make the mismatch guard compare a number against itself.
+  const fromLink = providerStateFromLink({
+    id: 'plink_test',
+    status: 'paid',
+    amount: 999900,
+    amount_paid: 100,
+    currency: 'INR',
+    short_url: 'https://rzp.io/i/test',
+    reference_id: 'order-uuid',
+    payments: [{ payment_id: 'pay_1', status: 'captured', amount: 100 }],
+  });
+  check('paid amount comes from amount_paid, never link.amount',
+    fromLink.paidAmountMinor === 100, String(fromLink.paidAmountMinor));
+  check('captured attempt supplies the payment id', fromLink.paymentId === 'pay_1');
+
+  const noSummary = providerStateFromLink({
+    id: 'plink_test',
+    status: 'paid',
+    amount: 999900,
+    currency: 'INR',
+    short_url: 'https://rzp.io/i/test',
+    payments: [{ payment_id: 'pay_2', status: 'captured', amount: 4200 }],
+  });
+  check('absent amount_paid falls back to the captured attempt, not link.amount',
+    noSummary.paidAmountMinor === 4200, String(noSummary.paidAmountMinor));
+
+  const noPayments = providerStateFromLink({
+    id: 'plink_test',
+    status: 'paid',
+    amount: 999900,
+    currency: 'INR',
+    short_url: 'https://rzp.io/i/test',
+  });
+  check('no amount evidence at all yields null, not the requested amount',
+    noPayments.paidAmountMinor === null, String(noPayments.paidAmountMinor));
+
+  // Same rule on the webhook side, where the entities arrive separately.
+  const fromHook = providerStateFromWebhook({
+    event: 'payment_link.paid',
+    payload: {
+      payment_link: { entity: { id: 'plink_1', status: 'paid', amount: 999900, amount_paid: 250 } },
+      payment: { entity: { id: 'pay_3', status: 'captured', amount: 250, currency: 'INR' } },
+    },
+  });
+  check('webhook paid amount ignores the link amount too',
+    fromHook.paidAmountMinor === 250, String(fromHook.paidAmountMinor));
+  check('webhook link status is narrowed to the known union', fromHook.linkStatus === 'paid');
+
+  const bogusStatus = providerStateFromWebhook({
+    event: 'payment_link.paid',
+    payload: { payment_link: { entity: { id: 'plink_1', status: 'settled_probably' } } },
+  });
+  check('unrecognised link status becomes null, which decides nothing',
+    bogusStatus.linkStatus === null && decideNextStatus(bogusStatus).next === null);
+}
+
+console.log('\n=== 13. Webhook signature verification ===');
+{
+  const secret = 'whsec_placeholder_not_a_real_secret';
+  const body = Buffer.from(JSON.stringify({ event: 'payment_link.paid', payload: {} }), 'utf8');
+
+  // Signed the way Razorpay signs: HMAC-SHA256 over the exact bytes, hex.
+  const crypto = await import('node:crypto');
+  const good = crypto.createHmac('sha256', secret).update(body).digest('hex');
+
+  check('a correctly signed body verifies', verifySignature(body, good, secret) === true);
+  check('surrounding whitespace is tolerated', verifySignature(body, ` ${good}\n`, secret) === true);
+
+  // One flipped character. The signature is the right length, so this is the case
+  // timingSafeEqual actually adjudicates.
+  const flipped = (good[0] === 'a' ? 'b' : 'a') + good.slice(1);
+  check('one altered character fails', verifySignature(body, flipped, secret) === false);
+
+  check('the wrong secret fails', verifySignature(body, good, 'whsec_other') === false);
+
+  // Byte-level tampering. A body that differs by a single digit must not verify -
+  // this is the amount-tamper case, at the layer that is supposed to stop it.
+  const tampered = Buffer.from(
+    JSON.stringify({ event: 'payment_link.paid', payload: { x: 1 } }),
+    'utf8',
+  );
+  check('a modified body fails against the original signature',
+    verifySignature(tampered, good, secret) === false);
+
+  // Length mismatches must RETURN false, not throw: timingSafeEqual throws on
+  // unequal lengths, and an exception here would answer 500 to a forgery, which
+  // Razorpay would then retry on a schedule.
+  let threw = null;
+  try {
+    check('a truncated signature fails', verifySignature(body, good.slice(0, 32), secret) === false);
+    check('an over-long signature fails', verifySignature(body, good + 'ff', secret) === false);
+    check('an empty signature fails', verifySignature(body, '', secret) === false);
+    check('a non-hex signature of the right length fails',
+      verifySignature(body, 'z'.repeat(64), secret) === false);
+  } catch (error) {
+    threw = error;
+  }
+  check('length mismatches never throw', threw === null, threw ? String(threw.message) : '');
+
+  // Same bytes, same secret, same answer. A verifier that depended on parse order or
+  // key iteration would fail this.
+  check('verification is stable across calls',
+    verifySignature(body, good, secret) === verifySignature(body, good, secret));
 }
 
 console.log(`\n${'='.repeat(60)}`);

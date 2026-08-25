@@ -5,8 +5,9 @@ import { Badge } from './Badge';
 /**
  * The visible marker on anything the mock adapter produced.
  *
- * This is not decoration. `POST /api/chat` and the Razorpay payments layer are not
- * built yet, so parts of the demo flow are served by src/services/mock/. A reviewer
+ * This is not decoration. `POST /api/chat` is not built yet, and with VITE_USE_MOCK on
+ * the payment states come from a local stand-in rather than from Razorpay, so parts of
+ * the demo flow are served by src/services/mock/. A reviewer
  * has to be able to tell, at a glance and without reading the source, which parts
  * of the screen are real backend data and which are simulated - otherwise the demo
  * is claiming more than it does.

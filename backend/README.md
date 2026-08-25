@@ -177,6 +177,10 @@ cp .env.example .env    # then fill in the three Supabase values
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | **Backend only. Bypasses RLS entirely.** |
 | `PORT` | no | defaults to `3000` |
 | `NODE_ENV` | no | `development` \| `test` \| `production`, defaults to `development` |
+| `RAZORPAY_KEY_ID` | all three, or none | Test-mode key id |
+| `RAZORPAY_KEY_SECRET` | all three, or none | **Backend only.** |
+| `RAZORPAY_WEBHOOK_SECRET` | all three, or none | **Backend only.** Min 8 chars. What makes signature verification meaningful. |
+| `AGENTROUTER_API_KEY` | no | **Backend only.** Present in `.env.example`, read by nothing yet — the agent layer is not built. |
 
 `src/config/env.ts` validates all of this at import time and **exits** if anything is
 missing or malformed, reporting every problem at once. A blank value (`FOO=`) is
@@ -184,9 +188,16 @@ treated as missing, because otherwise it satisfies `z.string()` and resurfaces l
 as a confusing 401 from Supabase. Only variable **names** are ever printed — never
 values.
 
-> **`SUPABASE_SERVICE_ROLE_KEY` must never leave the backend.** Not in a React Native
-> bundle, not in a Next.js client component, not in an API response, not in a log
-> line, not in an error message. `.env` is gitignored; `.env.example` contains
+The three Razorpay variables are **all-or-none**: setting one or two is rejected at
+startup rather than producing a server that can create payment links but cannot verify
+the webhooks confirming them. Omit all three and the server runs fine with payments
+disabled — the payment routes answer `501 PAYMENT_NOT_CONFIGURED`, naming the missing
+variables, and everything else works. Outside production, `RAZORPAY_KEY_ID` must begin
+`rzp_test_`, so a live key cannot be loaded into a dev server by accident.
+
+> **`SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET`
+> must never leave the backend.** Not in a React bundle, not in an API response, not in
+> a log line, not in an error message. `.env` is gitignored; `.env.example` contains
 > placeholders only.
 
 ---
@@ -229,6 +240,14 @@ The migration is **idempotent** — `CREATE TABLE IF NOT EXISTS`,
 `DROP POLICY IF EXISTS` before every `CREATE POLICY`, `CREATE OR REPLACE FUNCTION` —
 so running it twice is safe.
 
+**Confirming it worked.** `GET /health/ready` distinguishes the two first-run states by
+name: `not_migrated` means the tables are absent, `not_seeded` means they exist and
+`products` is empty. The server prints the same diagnosis at boot, with the specific
+remedy rather than a list of everything that could be wrong. `npm run survey:live`
+reports what actually exists, and `npm run test:schema` executes this file against a
+real Postgres 17 in WASM and probes every table, constraint, index, trigger and policy —
+useful before you run it against a project you care about.
+
 ### What it creates
 
 | Table | Purpose |
@@ -240,6 +259,23 @@ so running it twice is safe.
 | `orders` | the money state machine, 7 states |
 | `agent_actions` | **the audit trail.** Every tool call, its arguments, and its outcome |
 | `payment_events` | raw webhook deliveries, with `UNIQUE (provider, provider_event_id)` for idempotency |
+
+Delete behaviour is chosen per relationship, not applied uniformly:
+
+- `messages` → `conversations` is **`CASCADE`**. A message outside its conversation is
+  meaningless.
+- `agent_actions` → `conversations` and → `orders` is **`SET NULL`**, deliberately *not*
+  `CASCADE`. This is the audit trail. Deleting a conversation must not erase the record
+  that money was moved, or refused, on its behalf — an audit trail that can be deleted
+  by deleting the thing it audits is not one.
+- `orders` → `products` is **`RESTRICT`** and `NOT NULL`. An order always refers to a
+  real product, so a product with orders against it cannot be deleted; it gets
+  `active = false` instead. That violation arrives as `23001`, which is *not* `23503` —
+  a distinction `utils/errors.ts` gets right and `test:logic` asserts, because mapping
+  it to "foreign key violation" would tell the caller the product is missing when it is
+  in fact still there.
+- `payment_events` → `orders` is **`SET NULL`**, for the same reason as the audit trail:
+  what Razorpay sent is evidence, and it outlives the row it referred to.
 
 Order lifecycle:
 
@@ -307,7 +343,65 @@ curl http://localhost:3000/health
 ```
 
 `GET /` returns a route index, including what is not built yet — so a caller hitting
-`/api/chat` learns it is coming rather than getting a bare 404.
+`/api/chat` learns it is coming rather than getting a bare 404. It also reports
+`payments.configured`, which distinguishes "the route is missing" from "the route is
+there and this deployment has no keys". Whether credentials exist, never what they are.
+
+### Tests
+
+```bash
+npm test
+```
+
+That is `build` → `test:logic` → `test:http` → `test:http:prod`. None of the four needs
+a database, a network, or credentials — which is the point: the parts that decide what
+happens to money are pure functions over explicit inputs, and they are tested that way.
+
+| Script | What it covers | Needs |
+|---|---|---|
+| `npm run test:logic` | Pure logic: the order state machine, money arithmetic and overflow bounds, `decideNextStatus()` over every provider state, error mapping (including `23001` restrict_violation ≠ `23503`), deterministic search ranking. | nothing |
+| `npm run test:http` | The real Express app in-process via `createApp()`: routing, validators, error envelope, `X-Request-ID`, the `501 PAYMENT_NOT_CONFIGURED` path, and a webhook with a forged signature. | nothing |
+| `npm run test:http:prod` | The same app with `NODE_ENV=production`, asserting that 5xx bodies carry no stack trace, no message, and nothing about credentials. | nothing |
+| `npm run test:schema` | The migration executed **verbatim** against a real Postgres 17, then probed: every table, constraint, index, trigger, RLS policy, and the seed. | see below |
+
+`test:schema` runs the SQL against Postgres compiled to WASM, so it needs one package
+that is deliberately **not** a dependency of this project:
+
+```bash
+npm install --no-save @electric-sql/pglite
+```
+
+`--no-save` keeps it out of `package.json` — it is a test harness, not something the
+server links against. Without it the script exits with instructions rather than
+pretending to pass.
+
+### Verifying against your own Supabase project
+
+Two scripts talk to the real project named in `.env`. Both are read-mostly and both
+clean up after themselves.
+
+```bash
+npm run survey:live    # what exists: tables, row counts, RLS state
+npm run verify:live    # exercises the repositories end to end
+```
+
+`verify:live` walks acceptance criteria 8–14 by calling the repository functions rather
+than raw SQL, so a correct schema behind a broken repository still fails. It creates a
+conversation, messages, an order and agent actions tagged with a per-run id, then
+deletes them in reverse dependency order. Products are only ever read.
+
+Its exit codes are distinct on purpose: `0` all passed, `1` ran and something failed,
+`2` could not run (`not_migrated` — apply the migration first). Anything scripting this
+needs to tell "broken" apart from "not set up yet".
+
+```bash
+npm run verify:live -- --dry-run
+```
+
+Validates the verifier itself with no network: every import resolves, every call target
+is a function, and every enum literal it would send is one the codebase actually
+defines. A verifier that cannot run has never been exercised, and the failure it then
+reports is indistinguishable from the failure it was written to find.
 
 ---
 
@@ -372,10 +466,70 @@ conversation, in order.
 `POST /api/orders` creates in `PENDING_CONFIRMATION` only. It prices the order from
 `products.price` read at that moment and **never** from the request body. Pass an
 `idempotencyKey` for anything that will lead to a payment: a retried request returns
-the original order instead of creating a second one.
+the original order instead of creating a second one. Reusing the same key with a
+*different* body is a `409 IDEMPOTENCY_KEY_REUSED` rather than a silent success —
+the key and a fingerprint of the request are stored together, so a changed amount
+cannot hide behind a replayed key.
 
-`POST /api/chat` and `POST /api/webhooks/razorpay` are **not implemented** in this
-phase.
+### Payments
+
+All three answer `501 PAYMENT_NOT_CONFIGURED` when the Razorpay variables are unset,
+naming the variables that are missing.
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/orders/:id/payment-link` | **Requires `{ "approved": true, "approvalReason": "..." }`.** `201`. Moves the order to `PAYMENT_PENDING`. |
+| `GET` | `/api/orders/:id/payment` | Current payment view. Contacts nobody. |
+| `POST` | `/api/orders/:id/payment/refresh` | Asks Razorpay what happened and applies the answer. |
+
+The request body accepts `approved`, `approvalReason` and `conversationId` — and
+nothing else. It is `.strict()`, so sending `amount`, `currency`, `status` or
+`paymentUrl` is a `400` rather than a field that is quietly ignored. The amount charged
+is read from the order row inside the service, so no caller can name its own price.
+
+`approved` is typed as the literal `true`, not a boolean. A request without it does not
+fail in the validator — it reaches the service, which writes a `blocked` row to
+`agent_actions` and then refuses with `403 APPROVAL_REQUIRED`. The audit trail is the
+product's evidence that the guardrail fired, so the refusal has to be recorded, not
+merely returned.
+
+**No route in this file can produce `PAID`.** `payment-link` sets
+`PAYMENT_PENDING`, which is a statement about our own intent — we asked Razorpay for a
+link. `PAID` comes only from a signature-verified webhook or from a value Razorpay
+handed back on `/refresh`. `/refresh` looks like an exception and is not: the caller
+supplies no payment information at all, only an order id, and everything acted on
+arrives from Razorpay inside the handler.
+
+`/refresh` exists because Razorpay cannot deliver a webhook to `localhost`, and because
+in production an order stuck in `PAYMENT_PENDING` is not evidence that nobody paid.
+
+### Webhooks
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/webhooks/razorpay` | HMAC-SHA256 over the **raw** request bytes. |
+
+Three ordered properties, and the order is the design:
+
+1. **Authenticate first.** Nothing is parsed, recorded or acted on before the signature
+   verifies. An unsigned or wrongly-signed delivery is a `401` that leaves no trace in
+   the order tables. The comparison is `crypto.timingSafeEqual` behind a length check —
+   the check is required rather than defensive, because `timingSafeEqual` throws on
+   unequal lengths.
+2. **Record before acting.** The event lands in `payment_events` before any order is
+   touched, so a crash mid-handler leaves evidence of what arrived.
+3. **Ack what a retry cannot fix.** An unknown event type, an unknown order, or an
+   amount mismatch is recorded and answered `200`, because retrying will produce the
+   same result forever. A transient failure on our side answers `5xx`, so Razorpay
+   retries. Getting this backwards yields either a retry storm or a lost payment.
+
+This route is mounted with `express.raw()` **before** `express.json()`, and that
+ordering is load-bearing: `express.json()` discards the bytes, and re-serialising the
+parsed object does not reproduce them — key order, whitespace and number formatting all
+differ — so a signature check downstream of it would reject valid deliveries. See
+`src/server.ts`.
+
+`POST /api/chat` is **not implemented** in this phase; it needs the Claude + MCP layer.
 
 ---
 
@@ -507,20 +661,37 @@ Three constraints already baked into this phase:
 
 ---
 
-## 12. Future Razorpay integration
+## 12. Razorpay integration
 
-A `src/razorpay/` layer will own the API calls and call into `orderRepo` to persist
-what happened. **No Razorpay call will ever live in a repository.**
+**Built.** Test Mode only. `src/services/` owns the API calls and calls into `orderRepo`
+to persist what happened. **No Razorpay call lives in a repository.**
+
+Two services, split along one line — HTTP versus meaning:
+
+- `services/razorpayClient.ts` — HTTP to `api.razorpay.com/v1` and nothing else. Direct
+  REST with `fetch` and an `AbortSignal.timeout`, no SDK: two endpoints are needed
+  (`POST /payment_links`, `GET /payment_links/{id}`) and a dependency that bundles the
+  rest of the surface area is a larger thing to audit than the two calls it replaces.
+- `services/paymentService.ts` — what a payment state *means*, and which order
+  transition it implies.
 
 ```
-approval → razorpay.createOrder()      → updateOrderStatus(ORDER_CREATED)
-         → razorpay.createPaymentLink() → updateOrderStatus(PAYMENT_PENDING)
-         → user pays
+approval (approved: true + a reason)
+         → createPaymentLink()          → updateOrderStatus(PAYMENT_PENDING)
+         → user pays on the Razorpay page
          → webhook → verify HMAC → payment_events insert
-                                 → updateOrderStatus(PAID)
+                                 → applyProviderState() → updateOrderStatus(PAID)
+
+         (or, with no webhook reachable: POST /payment/refresh
+          → fetchPaymentLink() → the same applyProviderState())
 ```
 
-The schema is already built for it:
+`decideNextStatus()` is the centre of it, and it is a **pure function** from a provider
+state to the next order status. That is what makes the money path testable without a
+network — every provider state, including the ones Razorpay produces rarely, is
+exercised by `npm run test:logic` in milliseconds.
+
+The schema was built for this and is now used as intended:
 
 - `orders.razorpay_order_id`, `razorpay_payment_link_id`, `razorpay_payment_id` — each
   nullable and `UNIQUE`, populated as the flow advances.
@@ -530,11 +701,12 @@ The schema is already built for it:
 - `payment_events.signature_verified` — recorded per event. Only a
   signature-verified webhook may move an order to `PAID`.
 - The partial index on unprocessed events supports a reconciliation sweep for
-  deliveries that failed mid-processing.
+  deliveries that failed mid-processing — which is what `/payment/refresh` performs
+  for a single order.
 
-Test Mode only. Test keys will be `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and
-`RAZORPAY_WEBHOOK_SECRET`, added to `.env.example` at that time — and the webhook
-secret is what makes signature verification meaningful, so it is not optional.
+Test keys only: outside production, `RAZORPAY_KEY_ID` must begin `rzp_test_` or the
+process refuses to start. The webhook secret is what makes signature verification
+meaningful, so it is not optional — all three variables or none.
 
 ---
 
@@ -578,11 +750,15 @@ The pieces this phase put in place for it:
 
 ## What is deliberately not built yet
 
-Claude API · AgentRouter · MCP server · Razorpay · Payment Links · Webhooks ·
-Telegram · React Native app · Next.js frontend.
+Claude API · AgentRouter · MCP server · `POST /api/chat` · Telegram · React Native app.
 
-The database and its access layer come first. Everything above depends on the order
-state machine and the audit trail being right.
+Also absent, and worth naming separately because it is a security gap rather than a
+missing feature: **there is no auth layer yet.** See
+[Known gap in this phase](#known-gap-in-this-phase).
+
+The database, its access layer and the money path came first. Everything above depends
+on the order state machine and the audit trail being right, and those are far cheaper to
+correct now than after four layers are built on them.
 
 ---
 
@@ -595,7 +771,9 @@ backend/
 │   │   ├── conversations.ts
 │   │   ├── health.ts
 │   │   ├── orders.ts
-│   │   └── products.ts
+│   │   ├── payments.ts            the approval gate; cannot itself produce PAID
+│   │   ├── products.ts
+│   │   └── webhooks.ts            HMAC over raw bytes, before the JSON parser
 │   ├── config/
 │   │   └── env.ts                 validated at import, or the process exits
 │   ├── db/
@@ -609,13 +787,22 @@ backend/
 │   │   ├── conversationRepo.ts
 │   │   ├── messageRepo.ts
 │   │   ├── orderRepo.ts           database state only — no Razorpay calls
+│   │   ├── paymentEventRepo.ts    webhook idempotency, one row per delivery
 │   │   └── productRepo.ts         deterministic search
 │   ├── services/
-│   │   └── healthService.ts
+│   │   ├── healthService.ts
+│   │   ├── paymentService.ts      what a payment state means; decideNextStatus()
+│   │   └── razorpayClient.ts      HTTP to Razorpay and nothing else
 │   ├── utils/
 │   │   ├── errors.ts
 │   │   └── money.ts               integer minor units
 │   └── server.ts
+├── scripts/
+│   ├── smoke-http.mjs             the real app in-process, no network
+│   ├── smoke-logic.mjs            pure logic: state machine, money, mapping
+│   ├── survey-live.mjs            what exists in your Supabase project
+│   ├── verify-live.mjs            criteria 8–14 through the repositories
+│   └── verify-schema-pglite.mjs   the migration against a real Postgres 17
 ├── supabase/
 │   ├── migrations/
 │   │   └── 001_initial_schema.sql  7 tables, RLS, policies, grants
