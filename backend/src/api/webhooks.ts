@@ -54,7 +54,12 @@ import {
   getOrderByRazorpayPaymentLinkId,
   type PublicOrder,
 } from '../repositories/orderRepo.js';
-import { applyProviderState, type ProviderPaymentState } from '../services/paymentService.js';
+import {
+  applyProviderState,
+  capturePaymentIfAuthorised,
+  type ProviderPaymentState,
+} from '../services/paymentService.js';
+import { fetchPayment } from '../services/razorpayClient.js';
 import { badRequest, isAppError, paymentNotConfigured } from '../utils/errors.js';
 
 export const webhooksRouter = Router();
@@ -262,6 +267,50 @@ function peekEventType(parsed: unknown): string {
   return 'unknown';
 }
 
+/**
+ * Apply one verified delivery, capturing first when the payment is only authorised.
+ *
+ * `payment.authorized` needs its own arm because of how Standard Checkout behaves on
+ * an account without auto-capture: the customer pays, the bank approves, funds are
+ * held - and nothing is collected. `decideNextStatus` correctly reads `authorized`
+ * as "changes nothing", so without this the order would sit at PAYMENT_PENDING while
+ * the customer believes they have paid, and the hold would lapse days later having
+ * moved no money.
+ *
+ * The browser's return trip captures too, and usually gets there first. This arm is
+ * for the case that makes a webhook worth having at all: the customer closed the tab
+ * between paying and the success handler firing. They still paid.
+ *
+ * Both paths call the SAME `capturePaymentIfAuthorised`, which captures for the
+ * amount on the order row and then routes the result through `applyProviderState`.
+ * So a capture triggered by a webhook is subject to every check a capture triggered
+ * by a browser is - and if both fire at once, Razorpay refuses the second, which
+ * surfaces as a provider error on that path rather than a double charge.
+ *
+ * Payment Link deliveries keep the direct path. They carry a link entity that
+ * `providerStateFromWebhook` reads, and links are created without manual capture.
+ */
+async function applyDelivery(
+  order: PublicOrder,
+  body: WebhookBody,
+  requestId: string,
+): Promise<{ applied: boolean; order: PublicOrder; note: string }> {
+  const payment = body.payload.payment?.entity;
+  const paymentId = nonEmpty(payment?.id);
+
+  if (body.event === 'payment.authorized' && paymentId !== null) {
+    // Deliberately re-read from Razorpay rather than trusting the delivery's own
+    // `amount` field. The signature proves the body is Razorpay's, but the capture
+    // that follows is a money action, and the figure it acts on should come from the
+    // same authenticated read every other money action in this codebase uses.
+    const fetched = await fetchPayment(paymentId);
+
+    return capturePaymentIfAuthorised(order, fetched, { requestId });
+  }
+
+  return applyProviderState(order, providerStateFromWebhook(body), { requestId });
+}
+
 // -----------------------------------------------------------------------------
 // Route
 // -----------------------------------------------------------------------------
@@ -397,9 +446,7 @@ webhooksRouter.post('/razorpay', async (req, res) => {
   }
 
   try {
-    const result = await applyProviderState(order, providerStateFromWebhook(body), {
-      requestId: req.requestId,
-    });
+    const result = await applyDelivery(order, body, req.requestId);
 
     await markEventProcessed(event.id, order.id);
 

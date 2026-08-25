@@ -219,9 +219,19 @@ async function call<T>(schema: z.ZodType<T>, options: CallOptions): Promise<T> {
     // `description` is not, and stays in `cause`.
     const providerError = providerErrorSchema.safeParse(parsedBody);
 
+    // A 401/403 from Razorpay is not the caller's fault and must not be reported as
+    // one - our own 401 would tell a customer they need to authenticate, when in
+    // fact this server's key pair was rejected. It stays a 502 (the failure is
+    // upstream of the request) with a message that names the real problem, so an
+    // operator reading it reaches for the dashboard rather than the login page.
+    const credentialsRejected = response.status === 401 || response.status === 403;
+
     throw badGateway(
       'PAYMENT_PROVIDER_ERROR',
-      `Razorpay rejected the request (${options.operation}).`,
+      credentialsRejected
+        ? `Razorpay rejected this server's credentials (${options.operation}). ` +
+            'Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in the backend environment.'
+        : `Razorpay rejected the request (${options.operation}).`,
       {
         cause: parsedBody,
         details: {
@@ -342,4 +352,186 @@ export async function fetchPaymentLink(paymentLinkId: string): Promise<RazorpayP
     path: `/payment_links/${encodeURIComponent(paymentLinkId)}`,
     operation: 'fetchPaymentLink',
   });
+}
+
+// -----------------------------------------------------------------------------
+// Standard Checkout
+//
+// A second payment method, not a replacement. Payment Links hand the customer a
+// provider-hosted page; Standard Checkout opens Razorpay's modal inside our own
+// page. Both end at the same place - a payment Razorpay has captured - and both
+// are read back through the same `paymentService.applyProviderState`.
+//
+// The extra machinery below exists because the modal path returns its outcome
+// through the CUSTOMER'S BROWSER. Three values come back from `checkout.js`:
+// payment id, order id, and an HMAC signature over the pair. The signature proves
+// Razorpay issued them, and that is all it proves - it says nothing about how much
+// was collected. So the browser's word is used only to look up the payment, and
+// every figure acted on comes from `fetchPayment` below.
+// -----------------------------------------------------------------------------
+
+/**
+ * Razorpay's minimum for an order, in minor units. ₹1.00.
+ *
+ * Enforced here as well as in the service so a sub-minimum amount fails with a
+ * sentence rather than as an opaque BAD_REQUEST_ERROR from the provider.
+ */
+export const MINIMUM_ORDER_AMOUNT_MINOR = 100;
+
+/**
+ * Order lifecycle, as Razorpay reports it.
+ *
+ * `attempted` means at least one payment was tried against the order - it does NOT
+ * mean money arrived, and paymentService treats it as no change. `paid` means the
+ * full amount was captured.
+ */
+const ORDER_STATUSES = ['created', 'attempted', 'paid'] as const;
+
+const orderSchema = z.looseObject({
+  id: z.string().min(1),
+  status: z.enum(ORDER_STATUSES),
+  /** The figure we asked for, echoed back. Never treated as money collected. */
+  amount: z.number().int().nonnegative(),
+  /** Razorpay's own tally of what has been captured against this order. */
+  amount_paid: z.number().int().nonnegative().optional(),
+  currency: z.string().min(3),
+  /** Our order UUID, echoed back. */
+  receipt: z.string().nullish(),
+});
+
+export type RazorpayOrder = z.infer<typeof orderSchema>;
+
+/**
+ * One payment, as `GET /v1/payments/{id}` reports it.
+ *
+ * `status` is a free string for the same reason `paymentAttemptSchema.status` is:
+ * an unrecognised value must not turn a readable payment into a 502. The documented
+ * set is `created | authorized | captured | refunded | failed`, and paymentService
+ * only ever tests for exact values it knows.
+ *
+ * `amount` is the load-bearing field and is required. For a captured payment it is
+ * what Razorpay collected, which is the figure `applyProviderState` checks against
+ * the order row. A response missing it is refused rather than read as `undefined`.
+ */
+const paymentSchema = z.looseObject({
+  id: z.string().min(1),
+  status: z.string().min(1),
+  amount: z.number().int().nonnegative(),
+  currency: z.string().min(3),
+  /** The Razorpay order this payment settles. Cross-checked against ours. */
+  order_id: z.string().nullish(),
+  method: z.string().nullish(),
+  /** Provider prose. Recorded for the audit trail, never shown to a customer. */
+  error_code: z.string().nullish(),
+  error_description: z.string().nullish(),
+});
+
+export type RazorpayPayment = z.infer<typeof paymentSchema>;
+
+/** `GET /v1/orders/{id}/payments` - a collection envelope around the above. */
+const paymentCollectionSchema = z.looseObject({
+  count: z.number().int().nonnegative(),
+  items: z.array(paymentSchema),
+});
+
+export interface CreateOrderInput {
+  /** Minor units. Read from the order row, never from a request body. */
+  amountMinor: number;
+  currency: string;
+  /**
+   * Our order UUID. Razorpay's `receipt` field, which is exactly what it is for -
+   * "your own identifier for this order". Capped at 40 characters by the provider;
+   * a UUID is 36.
+   */
+  receipt: string;
+  notes?: Record<string, string>;
+}
+
+/**
+ * Create a Razorpay Order for the Standard Checkout modal.
+ *
+ * The order is what binds an amount to a checkout session BEFORE the browser is
+ * involved. `checkout.js` is handed only this order's id; it cannot name a price,
+ * because the price is already fixed here, server-side, from our own order row.
+ * That is the property that makes a browser-driven payment method safe at all.
+ *
+ * `payment_capture` is deliberately NOT sent. It is a legacy flag, the account-level
+ * auto-capture setting supersedes it, and relying on either would make the outcome
+ * depend on dashboard configuration. `checkoutService` captures explicitly instead,
+ * so an authorised payment settles the same way on every account.
+ */
+export async function createOrder(input: CreateOrderInput): Promise<RazorpayOrder> {
+  return call(orderSchema, {
+    method: 'POST',
+    path: '/orders',
+    operation: 'createOrder',
+    body: {
+      amount: input.amountMinor,
+      currency: input.currency,
+      receipt: input.receipt,
+      ...(input.notes === undefined ? {} : { notes: input.notes }),
+    },
+  });
+}
+
+/**
+ * Read one payment from Razorpay.
+ *
+ * THIS IS THE CALL THAT MAKES THE MODAL PATH TRUSTWORTHY. The browser's success
+ * handler supplies a payment id and a signature proving Razorpay issued it. It does
+ * not supply - and is never asked for - the amount, the currency, or the status.
+ * Those are read here, from Razorpay, over an authenticated connection the customer
+ * has no part in.
+ */
+export async function fetchPayment(paymentId: string): Promise<RazorpayPayment> {
+  return call(paymentSchema, {
+    method: 'GET',
+    path: `/payments/${encodeURIComponent(paymentId)}`,
+    operation: 'fetchPayment',
+  });
+}
+
+/**
+ * Capture an authorised payment.
+ *
+ * Standard Checkout leaves a payment `authorized` unless the account has
+ * auto-capture switched on, and an authorised payment is a hold, not money. Rather
+ * than treat "authorized" as paid - which would report a settled order for funds
+ * that were never taken - the service captures explicitly and acts on the result.
+ *
+ * Razorpay requires `amount` and `currency` here and REJECTS a capture whose amount
+ * differs from the authorised amount. That makes this call an amount check in its
+ * own right: passing our order's figure means a payment authorised for anything else
+ * fails to capture instead of quietly settling.
+ */
+export async function capturePayment(
+  paymentId: string,
+  amountMinor: number,
+  currency: string,
+): Promise<RazorpayPayment> {
+  return call(paymentSchema, {
+    method: 'POST',
+    path: `/payments/${encodeURIComponent(paymentId)}/capture`,
+    operation: 'capturePayment',
+    body: { amount: amountMinor, currency },
+  });
+}
+
+/**
+ * Every payment attempted against a Razorpay Order.
+ *
+ * The reconciliation path for the modal method, and the counterpart to
+ * `fetchPaymentLink` for links: it is how an order paid in a modal reaches PAID on a
+ * backend Razorpay cannot deliver a webhook to, and how a lost webhook is recovered
+ * in a deployment that it can. Needed because a customer who closes the tab between
+ * paying and the success handler firing has still paid.
+ */
+export async function fetchOrderPayments(razorpayOrderId: string): Promise<RazorpayPayment[]> {
+  const collection = await call(paymentCollectionSchema, {
+    method: 'GET',
+    path: `/orders/${encodeURIComponent(razorpayOrderId)}/payments`,
+    operation: 'fetchOrderPayments',
+  });
+
+  return collection.items;
 }

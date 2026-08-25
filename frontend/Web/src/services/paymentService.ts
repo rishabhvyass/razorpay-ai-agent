@@ -1,20 +1,36 @@
 /**
  * Payments.
  *
- * Implemented on the backend, and consumed here:
- *   POST /api/orders/:id/payment-link      requires an explicit { approved: true }
- *   GET  /api/orders/:id/payment
- *   POST /api/orders/:id/payment/refresh   reconcile against Razorpay
+ * Implemented on the backend, and consumed here. Two methods, one settlement path:
+ *
+ *   Payment Links - Razorpay hosts the page, the customer leaves this app
+ *     POST /api/orders/:id/payment-link    requires an explicit { approved: true }
+ *
+ *   Standard Checkout - Razorpay's modal opens over this app
+ *     POST /api/create-order               requires an explicit { approved: true }
+ *     POST /api/verify-payment             the modal's result, verified server-side
+ *
+ *   Shared
+ *     GET  /api/orders/:id/payment
+ *     POST /api/orders/:id/payment/refresh reconcile against Razorpay
  *
  * ---------------------------------------------------------------------------
  * WHAT THIS MODULE STRUCTURALLY CANNOT DO: set a payment status.
  *
  * Every status shown comes from `PaymentView.order.status`, which the backend read
  * out of the database. The only writer of PAID is the backend's own
- * `applyProviderState`, reached from a signature-verified Razorpay webhook or from a
- * figure Razorpay handed back on /refresh. There is no argument this app can pass to
- * any of the three routes above that produces a PAID order, and `/refresh` takes no
- * payment information at all - only an order id.
+ * `applyProviderState`, reached from a signature-verified Razorpay webhook, from a
+ * figure Razorpay handed back on /refresh, or - for the modal - from a payment the
+ * backend re-read from Razorpay after checking the signature. There is no argument
+ * this app can pass to any of these routes that produces a PAID order.
+ *
+ * `verifyRazorpayPayment` is the one that most looks like an exception and is not.
+ * It posts three values the browser received from Razorpay, and the backend uses them
+ * to LOOK THE PAYMENT UP; the amount, the currency and the captured-or-not question
+ * are answered by Razorpay over the backend's own authenticated connection. The route
+ * does not accept an amount or a status, so there is nothing here to lie about. Its
+ * 200 is not the confirmation either - the confirmation is the order status inside the
+ * response body, and this app renders that.
  *
  * So the honest reading of a green "Payment verified" in this UI is "the backend
  * says Razorpay confirmed it", which is exactly what the product claims.
@@ -29,13 +45,19 @@
 
 import { config } from '@/lib/config';
 import { request } from './api';
-import { decodeBackendPaymentView, type BackendPaymentView } from './decode';
+import {
+  decodeBackendPaymentView,
+  decodeCheckoutSession,
+  type BackendPaymentView,
+  type CheckoutSession,
+} from './decode';
 import { getOrder } from './orderService';
 import {
   createMockPaymentLink,
   getMockPaymentState,
   settleMockPayment,
 } from './mock/mockPayments';
+import type { CheckoutHandlerResponse } from '@/lib/razorpayCheckout';
 import type { Order } from '@/types';
 
 export interface PaymentView {
@@ -132,6 +154,91 @@ export async function requestPaymentLink(
 
   createMockPaymentLink(orderId);
   return getPaymentView(orderId);
+}
+
+// -----------------------------------------------------------------------------
+// Standard Checkout
+// -----------------------------------------------------------------------------
+
+export type { CheckoutSession } from './decode';
+
+/**
+ * Open a Razorpay checkout session for an already-created order.
+ *
+ * `POST /api/create-order`. The name is Razorpay's: it creates a RAZORPAY order, the
+ * provider object that binds a price to a checkout session. Our own order row already
+ * exists - its id is the argument.
+ *
+ * NOTE WHAT IS NOT SENT: an amount. The backend reads the figure from the order row
+ * and its route schema is strict, so a body carrying `amount` is a 400 rather than a
+ * price this app got to choose. That is the property the whole payment surface rests
+ * on, and it is worth knowing it holds at the call site as well as in the handler.
+ *
+ * `approved: true` and `approvalReason` are required, and the backend writes a blocked
+ * MONEY_ACTION to the audit trail if either is missing. So this must be called from a
+ * user's explicit click, with a reason that says what they agreed to.
+ *
+ * Safe to call more than once: if a session is already open for the order the backend
+ * returns that one rather than creating a second. A customer who dismisses the modal
+ * and presses pay again gets the same Razorpay order, not a second way to be charged.
+ */
+export async function createRazorpayCheckoutSession(
+  orderId: string,
+  approvalReason: string,
+  signal?: AbortSignal,
+): Promise<CheckoutSession> {
+  if (config.useMock) {
+    // No mock branch, deliberately. Standard Checkout means Razorpay's own modal
+    // collecting real card details against a real provider order; there is nothing
+    // here a local overlay could stand in for that would not amount to a fake
+    // payment screen. Mock mode uses the labelled payment-link overlay instead.
+    throw new Error(
+      'Razorpay Checkout needs the real backend. Set VITE_USE_MOCK=false and configure ' +
+        'Razorpay keys on the server to pay with the checkout modal.',
+    );
+  }
+
+  return request<unknown>('/api/create-order', {
+    method: 'POST',
+    body: { orderId, approved: true, approvalReason },
+    signal,
+  }).then(decodeCheckoutSession);
+}
+
+/**
+ * Hand the modal's result to the backend for verification.
+ *
+ * `POST /api/verify-payment`. The three values are forwarded EXACTLY as Razorpay's
+ * success handler supplied them, under Razorpay's own key names - no renaming step in
+ * which a typo could become a payment that silently fails to verify.
+ *
+ * `orderId` is sent alongside them, and it is not redundant. It lets the backend check
+ * the signed `razorpay_order_id` against the one it stored for THIS order, so a
+ * genuine signature covering some other order cannot settle this one. Without it the
+ * backend has to resolve the order from the signed id, and that check becomes
+ * tautological.
+ *
+ * The resolved view is the order as the database now holds it. Render that. A rejected
+ * signature is a 400 and the order is untouched - which is the one case where it
+ * matters most that this function returns a status rather than a boolean.
+ */
+export async function verifyRazorpayPayment(
+  orderId: string,
+  response: CheckoutHandlerResponse,
+  signal?: AbortSignal,
+): Promise<PaymentView> {
+  return request<unknown>('/api/verify-payment', {
+    method: 'POST',
+    body: {
+      orderId,
+      razorpay_order_id: response.razorpay_order_id,
+      razorpay_payment_id: response.razorpay_payment_id,
+      razorpay_signature: response.razorpay_signature,
+    },
+    signal,
+  })
+    .then(decodeBackendPaymentView)
+    .then(fromBackend);
 }
 
 /**

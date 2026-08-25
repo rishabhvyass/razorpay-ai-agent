@@ -85,28 +85,40 @@ export function PaymentSteps({
     order.status === 'CANCELLED';
   const paid = order.status === 'PAID';
 
-  // A link exists if the provider issued one, or if one is in hand right now. Past
-  // orders keep the id even after the URL is no longer held in memory.
+  // A payment instrument exists if the provider issued one, or if one is in hand
+  // right now. Past orders keep the id even after the URL is no longer held in memory.
   const hasLink =
     Boolean(paymentUrl) ||
     Boolean(order.razorpayPaymentLinkId) ||
+    Boolean(order.razorpayOrderId) ||
     order.status === 'PAYMENT_PENDING' ||
     paid;
 
-  // A settled order has nothing in progress. Reading "Payment link generated - in
-  // progress" underneath "Payment not verified - failed" describes a payment that is
-  // still moving, on an order that has stopped. Which of the two replaces it depends
+  // The step is named after the instrument that actually exists. "Payment link
+  // generated" on an order paid through the checkout modal describes something that
+  // never happened - there is no link, and a reviewer reading the tracker against the
+  // order row would find no `razorpayPaymentLinkId` to match it. A link id is
+  // conclusive; a Razorpay order id with no link id means the modal. With neither, the
+  // step has not happened yet and the label is the one the spec's tracker names.
+  const instrument =
+    order.razorpayPaymentLinkId === null && order.razorpayOrderId !== null
+      ? 'Secure checkout opened'
+      : 'Payment link generated';
+
+  // A settled order has nothing in progress. Reading "…generated - in progress"
+  // underneath "Payment not verified - failed" describes a payment that is still
+  // moving, on an order that has stopped. Which of the two replaces it depends
   // on what the terminal status actually implies:
   //
   //   PAYMENT_FAILED / PAYMENT_EXPIRED  the provider had an attempt to decline or
-  //                                     expire, so a link existed. Done.
-  //   CANCELLED                         says nothing about whether a link was ever
+  //                                     expire, so an instrument existed. Done.
+  //   CANCELLED                         says nothing about whether one was ever
   //                                     issued, so it is left not-started rather
   //                                     than claimed either way.
   //
-  // This is only reached when the link itself is not in hand: the mock overlay's URL
-  // is not threaded through the failure card, and a real failed order keeps no live
-  // URL, so `hasLink` cannot see one even though one existed.
+  // This is only reached when nothing is in hand: the mock overlay's URL is not
+  // threaded through the failure card, and a real failed order keeps no live URL, so
+  // `hasLink` cannot see one even though one existed.
   const linkState: StepState = hasLink
     ? 'done'
     : order.status === 'PAYMENT_FAILED' || order.status === 'PAYMENT_EXPIRED'
@@ -117,7 +129,7 @@ export function PaymentSteps({
 
   const steps: Array<{ label: string; state: StepState }> = [
     { label: 'Order created', state: 'done' },
-    { label: 'Payment link generated', state: linkState },
+    { label: instrument, state: linkState },
   ];
 
   if (failed) {

@@ -58,6 +58,28 @@ export interface BackendPaymentView {
 }
 
 /**
+ * Exactly what `POST /api/create-order` returns.
+ *
+ * Two namespaces on purpose, and the split is worth preserving on this side too.
+ * The snake_case fields are Razorpay's own option names, forwarded to `checkout.js`
+ * untouched. The camelCase pair is ours, and it is what may be DISPLAYED: an amount
+ * shown to a customer comes from the backend's formatted string, not from the minor
+ * -unit integer that happens to be sitting in the modal's option bag.
+ */
+export interface CheckoutSession {
+  /** Publishable key id. Safe in a browser; it can create nothing on its own. */
+  key_id: string;
+  /** Razorpay's order id. The amount is bound to it server-side. */
+  order_id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  /** Our order row's id. */
+  orderId: string;
+  amountFormatted: string;
+}
+
+/**
  * `'unknown'` means "must be present, may hold anything" - the JSONB bags. It is
  * not the same as optional: a missing key is still a mismatch, because the server
  * always serialises it.
@@ -157,6 +179,23 @@ const PAYMENT_VIEW: Shape = {
   paymentLinkId: 'string|null',
   paymentId: 'string|null',
   failureReason: 'string|null',
+};
+
+/**
+ * backend/src/api/checkout.ts -> the `POST /api/create-order` response body.
+ *
+ * `key_id` and `order_id` are checked as hard requirements because the modal cannot
+ * open without them, and `checkout.js` fails opaquely on a missing key - a blank
+ * overlay, no error. Catching it here names the field instead.
+ */
+const CHECKOUT_SESSION: Shape = {
+  key_id: 'string',
+  order_id: 'string',
+  amount: 'number',
+  currency: 'string',
+  description: 'string',
+  orderId: 'string',
+  amountFormatted: 'string',
 };
 
 /** backend/src/repositories/agentActionRepo.ts -> PublicAgentAction */
@@ -312,6 +351,10 @@ export const decodeOrders = (value: unknown): Order[] => many<Order>(value, ORDE
  */
 export const decodeBackendPaymentView = (value: unknown): BackendPaymentView =>
   one<BackendPaymentView>(value, PAYMENT_VIEW, 'payment');
+
+/** `POST /api/create-order` - the option bag for Razorpay's checkout modal. */
+export const decodeCheckoutSession = (value: unknown): CheckoutSession =>
+  one<CheckoutSession>(value, CHECKOUT_SESSION, 'checkout session');
 
 export const decodeAgentActions = (value: unknown): AgentAction[] =>
   many<AgentAction>(value, AGENT_ACTION, 'agent action');

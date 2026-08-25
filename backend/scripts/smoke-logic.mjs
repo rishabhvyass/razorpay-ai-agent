@@ -40,11 +40,12 @@ const { canTransition } = await import('../dist/repositories/orderRepo.js');
 const { parseMajorToMinor, lineTotalMinor, formatMinorUnits, MAX_AMOUNT_MINOR } = await import(
   '../dist/utils/money.js'
 );
+const { decideNextStatus, providerStateFromLink, providerStateFromPayment, decisivePayment } =
+  await import('../dist/services/paymentService.js');
 const { fromPostgrestError } = await import('../dist/utils/errors.js');
-const { decideNextStatus, providerStateFromLink } = await import(
-  '../dist/services/paymentService.js'
-);
 const { verifySignature, providerStateFromWebhook } = await import('../dist/api/webhooks.js');
+const { verifyCheckoutSignature } = await import('../dist/services/checkoutService.js');
+const { MINIMUM_ORDER_AMOUNT_MINOR } = await import('../dist/services/razorpayClient.js');
 
 let pass = 0;
 let fail = 0;
@@ -435,6 +436,138 @@ console.log('\n=== 13. Webhook signature verification ===');
   // key iteration would fail this.
   check('verification is stable across calls',
     verifySignature(body, good, secret) === verifySignature(body, good, secret));
+}
+
+console.log('\n=== 14. Standard Checkout: the browser-supplied triple ===');
+{
+  // The secret is invented here. It has to be, because this test's whole subject is
+  // whether a triple signed with the WRONG secret is rejected, and the only way to
+  // demonstrate that is to hold both secrets. Neither is real, and nothing here reads
+  // .env - a test that needed the live key would be untrustworthy for the opposite
+  // reason: it could not tell a working verifier from an absent one.
+  const crypto = await import('node:crypto');
+  const secret = 'test_secret_do_not_use_0123456789';
+  const orderId = 'order_QmT8xLd4pKzY1a';
+  const paymentId = 'pay_QmT9AbCdEfGh2b';
+
+  const sign = (payload, key) =>
+    crypto.createHmac('sha256', key).update(payload).digest('hex');
+
+  const good = sign(`${orderId}|${paymentId}`, secret);
+
+  check('a correctly signed triple verifies',
+    verifyCheckoutSignature(orderId, paymentId, good, secret) === true);
+
+  // The forgery this route exists to stop. An attacker who knows both ids - they are
+  // not secret, the browser is handed them - still cannot produce this hex without
+  // KEY_SECRET.
+  check('a forged signature is rejected',
+    verifyCheckoutSignature(orderId, paymentId, sign(`${orderId}|${paymentId}`, 'wrong_secret'), secret) === false);
+
+  // The concatenation order is part of the contract. Razorpay signs
+  // `order_id|payment_id`; a verifier that accepted the reverse would accept a
+  // signature the provider never issues, and one it might for some other pair.
+  check('the reversed concatenation is rejected',
+    verifyCheckoutSignature(orderId, paymentId, sign(`${paymentId}|${orderId}`, secret), secret) === false);
+
+  // A signature is proof about ONE pair of ids. Replaying it against a different
+  // payment - or a different order - must fail, or a single genuine payment could
+  // settle every order on the system.
+  check('a valid signature does not verify for another payment id',
+    verifyCheckoutSignature(orderId, 'pay_OTHER0000000000', good, secret) === false);
+  check('a valid signature does not verify for another order id',
+    verifyCheckoutSignature('order_OTHER00000000', paymentId, good, secret) === false);
+
+  // The pipe is a delimiter, not decoration. Without it "order_a" + "b|c" and
+  // "order_ab" + "c" would hash identically, so a signature for one pair would
+  // verify for the other.
+  check('the delimiter is not optional',
+    verifyCheckoutSignature(orderId, paymentId, sign(`${orderId}${paymentId}`, secret), secret) === false);
+
+  // timingSafeEqual throws on unequal lengths, so every one of these would be an
+  // exception rather than a rejection if the length guard were removed. An exception
+  // here becomes a 500, and a 500 is not a "no".
+  let threw = null;
+  try {
+    check('a truncated signature fails', verifyCheckoutSignature(orderId, paymentId, good.slice(0, 40), secret) === false);
+    check('an over-long signature fails', verifyCheckoutSignature(orderId, paymentId, `${good}ff`, secret) === false);
+    check('an empty signature fails', verifyCheckoutSignature(orderId, paymentId, '', secret) === false);
+    check('a non-hex signature of the right length fails',
+      verifyCheckoutSignature(orderId, paymentId, 'z'.repeat(64), secret) === false);
+  } catch (error) {
+    threw = error;
+  }
+  check('length mismatches never throw', threw === null, threw ? String(threw.message) : '');
+
+  // Razorpay's own docs show the signature arriving as a plain hex string; a stray
+  // newline from a curl-driven test should not read as a forgery.
+  check('surrounding whitespace is tolerated',
+    verifyCheckoutSignature(orderId, paymentId, `  ${good}\n`, secret) === true);
+
+  // ---------------------------------------------------------------------------
+  // What the signature does NOT prove. This is the part that matters.
+  // ---------------------------------------------------------------------------
+
+  // AUTHORIZED IS NOT PAID. Standard Checkout leaves a payment `authorized` unless
+  // the Razorpay account auto-captures. The money is held, not taken. Reporting PAID
+  // on a signed `authorized` payment would be the interface fabricating success for a
+  // payment that could still expire uncaptured.
+  const authorized = providerStateFromPayment({
+    id: paymentId, order_id: orderId, status: 'authorized',
+    amount: 249900, currency: 'INR', method: 'card', captured: false,
+    error_code: null, error_description: null, created_at: 1,
+  });
+  check('an authorized payment reports no paid amount', authorized.paidAmountMinor === null);
+  // `next: null` is the correct answer, not a fallback one: an authorised payment is
+  // real news that changes no order status. Anything else here would be the pull path
+  // settling an order on a hold.
+  check('an authorized payment decides nothing',
+    decideNextStatus(authorized).next === null, String(decideNextStatus(authorized).next));
+
+  const captured = providerStateFromPayment({
+    id: paymentId, order_id: orderId, status: 'captured',
+    amount: 249900, currency: 'INR', method: 'card', captured: true,
+    error_code: null, error_description: null, created_at: 1,
+  });
+  check('a captured payment reports the amount', captured.paidAmountMinor === 249900);
+  check('a captured payment decides PAID', decideNextStatus(captured).next === 'PAID');
+
+  const failedPayment = providerStateFromPayment({
+    id: paymentId, order_id: orderId, status: 'failed',
+    amount: 249900, currency: 'INR', method: 'card', captured: false,
+    error_code: 'BAD_REQUEST_ERROR', error_description: 'card declined',
+    created_at: 1,
+  });
+  const failedDecision = decideNextStatus(failedPayment);
+  check('a failed payment decides PAYMENT_FAILED', failedDecision.next === 'PAYMENT_FAILED');
+  // The note is what `applyProviderState` stores as the view's `failureReason`, so an
+  // empty one would leave the failure card with nothing to show.
+  check('a failed payment carries a written reason',
+    typeof failedDecision.note === 'string' && failedDecision.note.length > 0, failedDecision.note);
+  check('a failed payment reports no paid amount', failedPayment.paidAmountMinor === null);
+
+  // The two normalisers must not borrow each other's evidence. A payment read knows
+  // nothing about a link, so claiming a link status here would let a link-shaped
+  // conclusion be drawn from order-shaped facts.
+  check('a payment read reports no link status', captured.linkStatus === null);
+  check('a payment read carries the Razorpay order id', captured.razorpayOrderId === orderId);
+
+  // An order can accumulate several attempts. The captured one is the answer, whatever
+  // order the provider returns them in - "the last one" would let a later declined
+  // retry hide a payment the customer already made.
+  const attempts = [
+    { id: 'pay_1', order_id: orderId, status: 'failed', amount: 249900, currency: 'INR', method: 'card', captured: false, error_code: 'X', error_description: 'declined', created_at: 1 },
+    { id: 'pay_2', order_id: orderId, status: 'captured', amount: 249900, currency: 'INR', method: 'card', captured: true, error_code: null, error_description: null, created_at: 2 },
+    { id: 'pay_3', order_id: orderId, status: 'failed', amount: 249900, currency: 'INR', method: 'card', captured: false, error_code: 'X', error_description: 'declined', created_at: 3 },
+  ];
+  check('the captured attempt wins regardless of position',
+    decisivePayment(attempts)?.id === 'pay_2', String(decisivePayment(attempts)?.id));
+  check('no attempts means no decision', decisivePayment([]) === null);
+
+  // Razorpay rejects an order below one rupee, so the amount guard has to agree with
+  // the provider or the failure surfaces as a 502 from a request we should not have
+  // sent.
+  check('the minimum order amount is one rupee in paise', MINIMUM_ORDER_AMOUNT_MINOR === 100);
 }
 
 console.log(`\n${'='.repeat(60)}`);

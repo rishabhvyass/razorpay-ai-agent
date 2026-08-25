@@ -4,6 +4,7 @@ import { Badge, Button, ErrorState, MockNotice } from '@/components/ui';
 import { AGENT_PHASE_LABEL } from '@/hooks/useCheckoutSession';
 import { PaymentSteps } from './PaymentSteps';
 import { formatMinor } from '@/lib/money';
+import type { ReactNode } from 'react';
 import type { Order } from '@/types';
 
 /**
@@ -11,7 +12,7 @@ import type { Order } from '@/types';
  *
  * The wording matters here. This state does not say "processing" or "almost done",
  * because the app does not know: the customer may be mid-payment, may have closed
- * the tab, or may never return. It says what is true - a link was issued and
+ * the tab, or may never return. It says what is true - a payment was started and
  * nothing is confirmed until the provider says so.
  *
  * There is no client-side timer that flips this to success. Only a backend status
@@ -21,6 +22,7 @@ export function PaymentPending({
   order,
   paymentUrl,
   isMock,
+  checkout,
   onSimulate,
   simulateError,
   simulating = false,
@@ -31,6 +33,12 @@ export function PaymentPending({
   order: Order;
   paymentUrl: string | null;
   isMock: boolean;
+  /**
+   * The in-page Standard Checkout control, when this order can use it. Passed in
+   * rather than rendered here so this component stays presentational and the two
+   * payment methods stay separable - an order has one instrument, never both.
+   */
+  checkout?: ReactNode;
   /** Mock only. Provided so a reviewer can reach both outcomes deliberately. */
   onSimulate?: (outcome: 'success' | 'failure') => void;
   /** A settlement attempt that failed. Surfaced rather than swallowed. */
@@ -66,15 +74,19 @@ export function PaymentPending({
 
       <p className="text-ink text-[13px] font-medium">Complete the payment to continue.</p>
 
-      {/* Two different sentences, because "a link has been issued" was previously
-          asserted even when `paymentUrl` was null - the interface claiming a payment
-          link existed while the block below it said none did. */}
+      {/* Three different sentences, because the state genuinely differs and each of
+          the other two was previously asserted for all of them. A link was issued; a
+          checkout session is open and payable in-page; or nothing has been started at
+          all - the interface used to claim a payment link existed while the block
+          below it said none did. */}
       <p className="text-muted text-[13px] leading-relaxed">
         {paymentUrl
           ? `A payment link for ${formatMinor(order.amount, order.currency)} has been issued.`
-          : `No payment link has been issued for the ${formatMinor(order.amount, order.currency)} due.`}{' '}
+          : checkout
+            ? `A secure Razorpay checkout is ready for the ${formatMinor(order.amount, order.currency)} due.`
+            : `No payment has been started for the ${formatMinor(order.amount, order.currency)} due.`}{' '}
         This page is polling the backend and will update on its own — it will only report success
-        once Razorpay confirms the payment with a verified webhook.
+        once Razorpay confirms the payment was captured.
       </p>
 
       {paymentUrl ? (
@@ -97,13 +109,15 @@ export function PaymentPending({
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         )
+      ) : checkout ? (
+        checkout
       ) : (
         <div className="rounded-control border-line bg-surface-sunken flex items-start gap-2.5 border px-3 py-2.5">
           <Info className="text-muted mt-0.5 size-3.5 shrink-0" aria-hidden />
           <p className="text-muted text-xs leading-relaxed">
-            No payment link has been issued for this order, so there is nothing to pay yet and
-            nothing has been charged. Razorpay issues the link server-side when a purchase is
-            authorised; this app never constructs one of its own.
+            No payment has been started for this order, so there is nothing to pay yet and nothing
+            has been charged. Razorpay issues the payment server-side when a purchase is authorised;
+            this app never constructs a payment URL of its own.
           </p>
         </div>
       )}
@@ -121,10 +135,10 @@ export function PaymentPending({
             Check with Razorpay
           </Button>
           <p className="text-faint text-[11px] leading-relaxed">
-            Reads this payment link&apos;s state from Razorpay and applies what the provider
-            reports. Worth pressing if the backend is running locally, where Razorpay has no public
-            URL to deliver its webhook to. It cannot make a payment succeed: the status that appears
-            is the provider&apos;s answer, whatever that is.
+            Reads this payment&apos;s state from Razorpay and applies what the provider reports.
+            Worth pressing if the backend is running locally, where Razorpay has no public URL to
+            deliver its webhook to. It cannot make a payment succeed: the status that appears is the
+            provider&apos;s answer, whatever that is.
           </p>
           {reconciling ? (
             <p className="text-muted text-[12px]" role="status" aria-live="polite">

@@ -31,6 +31,10 @@ build/
 supabase/.branches/
 supabase/.temp/
 
+# Generated setup SQL. Derived from migrations/ + seed.sql by `npm run db:sql`,
+# so committing it would mean two copies of the schema that can drift apart.
+supabase/setup.generated.sql
+
 # Logs
 *.log
 npm-debug.log*
@@ -47,3 +51,9 @@ lerna-debug.log*
 Thumbs.db
 *.suo
 *.swp
+
+# Throwaway working directory. Anything an agent or a script writes here is
+# probe output, one-off notes, or a scratch response body from an API it was
+# testing - none of it belongs in history, and some of it may echo a request
+# that carried a credential.
+.scratch/

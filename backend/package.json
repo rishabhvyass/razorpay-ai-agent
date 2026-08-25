@@ -18,7 +18,8 @@
     "test:http:prod": "node scripts/smoke-http.mjs --prod",
     "test:schema": "node scripts/verify-schema-pglite.mjs",
     "verify:live": "node scripts/verify-live.mjs",
-    "survey:live": "node scripts/survey-live.mjs"
+    "survey:live": "node scripts/survey-live.mjs",
+    "db:sql": "node scripts/print-setup-sql.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.3",

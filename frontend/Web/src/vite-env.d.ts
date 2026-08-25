@@ -16,8 +16,22 @@
 interface ImportMetaEnv {
   /** Backend origin. Empty in development - vite.config.ts proxies to :3000. */
   readonly VITE_API_URL?: string;
-  /** Serve POST /api/chat, and the payment states, from src/services/mock/. */
+  /** Serve POST /api/chat, and the payment-link states, from src/services/mock/. */
   readonly VITE_USE_MOCK?: string;
+  /**
+   * Razorpay's PUBLISHABLE key id (`rzp_test_...`), and optional.
+   *
+   * This one is safe here and is the only Razorpay value that ever will be: it is the
+   * half Razorpay designed to sit in a browser and it can create nothing on its own.
+   * Its partner, RAZORPAY_KEY_SECRET, signs orders and payments - it stays in the
+   * backend environment and must never be given a VITE_ name.
+   *
+   * Optional because POST /api/create-order returns the key that created the Razorpay
+   * order, which is the one the modal is opened with. Set this only if you want the
+   * cross-check in lib/config.ts to catch a frontend and backend pointed at different
+   * Razorpay accounts.
+   */
+  readonly VITE_RAZORPAY_KEY_ID?: string;
 }
 
 interface ImportMeta {

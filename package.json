@@ -1,0 +1,28 @@
+{
+  "name": "checkout-concierge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI Growth & Agentic Commerce demo - conversation to explicitly authorised, Razorpay-verified purchase",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "install:all": "npm --prefix backend install && npm --prefix frontend/Web install",
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "npm --prefix backend run dev",
+    "dev:web": "npm --prefix frontend/Web run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend/Web run build",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend/Web run typecheck",
+    "lint": "npm --prefix frontend/Web run lint",
+    "test": "npm --prefix backend test",
+    "test:schema": "npm --prefix backend run test:schema",
+    "db:sql": "npm --prefix backend run db:sql",
+    "verify:live": "npm --prefix backend run verify:live",
+    "survey:live": "npm --prefix backend run survey:live"
+  },
+  "workspaces_note": "Deliberately NOT npm workspaces. The backend and the web client have separate lockfiles because they are separately deployable, and hoisting would put frontend packages in reach of the backend's import resolver - which is how a browser-only package ends up imported into a process that holds the service-role key. These scripts use --prefix instead.",
+  "dependencies": {},
+  "devDependencies": {}
+}

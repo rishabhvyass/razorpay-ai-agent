@@ -50,9 +50,12 @@ import {
 } from '../utils/errors.js';
 import { formatMinorUnits } from '../utils/money.js';
 import {
+  capturePayment,
   createPaymentLink,
+  fetchOrderPayments,
   fetchPaymentLink,
   type PaymentLinkStatus,
+  type RazorpayPayment,
   type RazorpayPaymentLink,
 } from './razorpayClient.js';
 
@@ -73,6 +76,39 @@ const PAYABLE_STATUSES: readonly OrderStatus[] = [
   'PAYMENT_PENDING',
   'PAYMENT_FAILED',
 ];
+
+/**
+ * Refuse to start a payment against an order that can no longer take one.
+ *
+ * Shared by both payment methods rather than written twice, because the two methods
+ * must not disagree about which orders are payable - a state that Payment Links
+ * refuse and Standard Checkout accepts is a second charge waiting to happen on an
+ * order one of them already settled.
+ *
+ * PAID is called out separately from the other unpayable states. It is the case that
+ * actually happens (a customer pressing pay twice, or a stale tab), and "this order
+ * is already paid" is a useful sentence where "an order with status PAID can no
+ * longer be paid" reads like a bug.
+ *
+ * `notCreated` names the thing that was not created, so the message is specific to
+ * the caller without either caller having to restate the rule.
+ */
+export function assertPayable(order: PublicOrder, notCreated: string): void {
+  if (order.status === 'PAID') {
+    throw conflict('CONFLICT', `This order is already paid. ${notCreated}`, {
+      orderId: order.id,
+      status: order.status,
+    });
+  }
+
+  if (!PAYABLE_STATUSES.includes(order.status) && order.status !== 'PENDING_CONFIRMATION') {
+    throw conflict(
+      'INVALID_STATE_TRANSITION',
+      `An order with status ${order.status} can no longer be paid.`,
+      { orderId: order.id, status: order.status },
+    );
+  }
+}
 
 // -----------------------------------------------------------------------------
 // The view a client reads
@@ -239,18 +275,23 @@ export async function issuePaymentLink(input: IssuePaymentLinkInput): Promise<Pa
     );
   }
 
-  if (order.status === 'PAID') {
-    throw conflict('CONFLICT', 'This order is already paid. No new payment link was created.', {
-      orderId: order.id,
-      status: order.status,
-    });
-  }
+  assertPayable(order, 'No new payment link was created.');
 
-  if (!PAYABLE_STATUSES.includes(order.status) && order.status !== 'PENDING_CONFIRMATION') {
+  // The mirror of the guard in checkoutService: one payment instrument per order.
+  // A Razorpay order with no link of ours means a checkout session is already open,
+  // and it is payable. Issuing a link alongside it would give the customer two live
+  // ways to pay the same order, and the second payment would land on an order
+  // already PAID with nothing able to attach it.
+  //
+  // Note the condition needs BOTH halves. A link read populates `razorpayOrderId`
+  // from `link.order_id` too, so testing that field alone would make this refuse to
+  // return an order its own link had already been created for.
+  if (order.razorpayPaymentLinkId === null && order.razorpayOrderId !== null) {
     throw conflict(
-      'INVALID_STATE_TRANSITION',
-      `An order with status ${order.status} can no longer be paid.`,
-      { orderId: order.id, status: order.status },
+      'CONFLICT',
+      'A Razorpay checkout session is already open for this order. Complete or abandon that ' +
+        'payment rather than issuing a link, so this order cannot be charged twice.',
+      { orderId: order.id, razorpayOrderId: order.razorpayOrderId },
     );
   }
 
@@ -398,6 +439,50 @@ export function providerStateFromLink(link: RazorpayPaymentLink): ProviderPaymen
     paidAmountMinor: link.amount_paid ?? captured?.amount ?? null,
     currency: link.currency,
   };
+}
+
+/**
+ * Normalise a single payment read into the same shape.
+ *
+ * Used by the Standard Checkout path, where the unit Razorpay reports on is a
+ * payment rather than a link. One line here carries the whole argument:
+ *
+ *   paidAmountMinor is null unless the payment is CAPTURED.
+ *
+ * `payment.amount` is populated on an `authorized` payment too, and it equals the
+ * figure the customer agreed to - so returning it would sail through the amount
+ * check in `applyProviderState` and mark an order PAID for a hold that no money has
+ * left. An authorisation is a promise; only a capture is a payment.
+ */
+export function providerStateFromPayment(payment: RazorpayPayment): ProviderPaymentState {
+  return {
+    // A payment read says nothing about a link, and inventing a link status here
+    // would let `decideNextStatus` reach a link-shaped conclusion from order-shaped
+    // evidence.
+    linkStatus: null,
+    paymentStatus: payment.status,
+    paymentId: payment.id,
+    razorpayOrderId:
+      typeof payment.order_id === 'string' && payment.order_id !== '' ? payment.order_id : null,
+    paidAmountMinor: payment.status === 'captured' ? payment.amount : null,
+    currency: payment.currency,
+  };
+}
+
+/**
+ * Pick the payment that decides an order's fate from everything attempted against it.
+ *
+ * A Razorpay Order can hold several payments - a declined card followed by a
+ * successful one is ordinary. A captured payment always wins regardless of position,
+ * because it is the one that took money; without one, the most recent attempt is what
+ * there is to report. Returns null for an order nobody has tried to pay.
+ */
+export function decisivePayment(payments: readonly RazorpayPayment[]): RazorpayPayment | null {
+  return (
+    payments.find((payment) => payment.status === 'captured') ??
+    payments[payments.length - 1] ??
+    null
+  );
 }
 
 /**
@@ -554,6 +639,76 @@ export async function applyProviderState(
   return { order: updated, applied: true, note };
 }
 
+/**
+ * Capture an authorised payment, then apply whatever Razorpay ends up reporting.
+ *
+ * Standard Checkout can leave a payment `authorized` rather than `captured` - the
+ * customer's bank has approved the charge and put a hold on the funds, but nothing
+ * has been collected. Auto-capture is an account-level dashboard setting, so whether
+ * a payment arrives captured is not something this codebase controls.
+ *
+ * Treating `authorized` as PAID would be the single worst bug available in this
+ * file: the order settles, the customer is told the payment is verified, and the
+ * hold expires days later having transferred nothing. So an authorised payment is
+ * captured explicitly, and the order moves only on the RESULT of that capture.
+ *
+ * The capture is sent with the ORDER's amount, which makes it an amount check in its
+ * own right - Razorpay rejects a capture that does not match what was authorised, so
+ * a payment authorised for some other figure fails here rather than settling.
+ *
+ * Shared by the browser-return path and by reconciliation, for the same reason
+ * `applyProviderState` is shared: two implementations of "did this payment settle"
+ * is two chances to disagree about whether money arrived.
+ */
+export async function capturePaymentIfAuthorised(
+  order: PublicOrder,
+  payment: RazorpayPayment,
+  context: { requestId: string },
+): Promise<ApplyProviderStateResult> {
+  if (payment.status !== 'authorized') {
+    return applyProviderState(order, providerStateFromPayment(payment), context);
+  }
+
+  const action = await startAgentAction({
+    toolName: 'capture_payment',
+    actionType: 'MONEY_ACTION',
+    orderId: order.id,
+    conversationId: order.conversationId,
+    reason:
+      'Razorpay authorised the payment without capturing it, so the funds are held but not ' +
+      'collected. Capturing for the amount recorded on the order.',
+    input: {
+      orderId: order.id,
+      paymentId: payment.id,
+      amount: order.amount,
+      currency: order.currency,
+      amountFormatted: order.amountFormatted,
+    },
+    requestId: context.requestId,
+  });
+
+  let captured: RazorpayPayment;
+
+  try {
+    captured = await capturePayment(payment.id, order.amount, order.currency);
+  } catch (cause) {
+    await failAgentAction(
+      action.id,
+      'PAYMENT_CAPTURE_FAILED',
+      cause instanceof Error ? cause.message : 'Capture failed.',
+    );
+    throw cause;
+  }
+
+  await completeAgentAction(
+    action.id,
+    { paymentId: captured.id, status: captured.status, amount: captured.amount },
+    order.id,
+  );
+
+  return applyProviderState(order, providerStateFromPayment(captured), context);
+}
+
 // -----------------------------------------------------------------------------
 // Reconciliation (pull)
 // -----------------------------------------------------------------------------
@@ -580,10 +735,29 @@ export async function refreshPaymentStatus(
     throw notFound('ORDER_NOT_FOUND', 'Order not found');
   }
 
+  // Standard Checkout leaves a Razorpay order id and no link. Read every payment
+  // attempted against it and act on the decisive one - which is how an order paid in
+  // the modal reaches PAID on a backend Razorpay cannot webhook, and how a customer
+  // who closed the tab mid-payment is still recorded as having paid.
+  if (order.razorpayPaymentLinkId === null && order.razorpayOrderId !== null) {
+    const payment = decisivePayment(await fetchOrderPayments(order.razorpayOrderId));
+
+    if (payment === null) {
+      return getPaymentView(order.id);
+    }
+
+    // Same capture rule as the browser-return path, deliberately: an authorised
+    // payment found by reconciliation is exactly as uncollected as one found by the
+    // success handler, and must not settle the order either.
+    await capturePaymentIfAuthorised(order, payment, context);
+
+    return getPaymentView(order.id);
+  }
+
   if (order.razorpayPaymentLinkId === null) {
     throw badRequest(
       'VALIDATION_ERROR',
-      'No payment link has been issued for this order, so there is nothing to reconcile.',
+      'No payment has been started for this order, so there is nothing to reconcile.',
       { orderId: order.id, status: order.status },
     );
   }

@@ -20,6 +20,23 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap"
       rel="stylesheet"
     />
+
+    <!--
+      Razorpay Standard Checkout.
+
+      There is deliberately no <script src="https://checkout.razorpay.com/v1/checkout.js">
+      tag here. The script is loaded on demand by src/lib/razorpayCheckout.ts, at the
+      moment a customer chooses to pay, for one reason: a tag here fails silently.
+      An ad blocker, an extension or a corporate proxy that blocks the request leaves
+      `window.Razorpay` undefined, and the failure surfaces as a pay button that does
+      nothing. Loaded as a promise, the same block becomes a rejection with a sentence
+      in it, shown next to the button, with the payment-link method offered underneath.
+
+      This preconnect is the part worth having in the document: it opens the TLS
+      connection to Razorpay's CDN early, so the on-demand fetch is not paying for a
+      handshake at the one moment the customer is waiting.
+    -->
+    <link rel="preconnect" href="https://checkout.razorpay.com" crossorigin />
   </head>
   <body>
     <div id="root"></div>

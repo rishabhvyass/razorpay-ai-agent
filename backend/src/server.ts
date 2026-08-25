@@ -10,8 +10,10 @@
  * trail being right, and those are far cheaper to correct now than after four
  * layers are built on them.
  *
- * The payments layer is built on top of it: Razorpay Payment Links, the webhook
- * receiver, and the reconcile endpoint. The agent layer is still absent, so
+ * The payments layer is built on top of it: Razorpay Payment Links, Standard
+ * Checkout, the webhook receiver, and the reconcile endpoint. Two payment methods,
+ * one settlement path - both end at `paymentService.applyProviderState`, which is
+ * the only function that can mark an order PAID. The agent layer is still absent, so
  * /api/chat remains unimplemented - which means money can move here only through an
  * explicitly authorised HTTP call, never on an agent's own initiative.
  */
@@ -21,6 +23,7 @@ import express from 'express';
 import type { Express } from 'express';
 import { pathToFileURL } from 'node:url';
 
+import { checkoutRouter } from './api/checkout.js';
 import { conversationsRouter } from './api/conversations.js';
 import { healthRouter } from './api/health.js';
 import { ordersRouter } from './api/orders.js';
@@ -117,6 +120,11 @@ export function createApp(): Express {
   // Also /api: these hang off /api/orders/:id, and keeping them in their own file
   // keeps the money path readable without splitting the URL space.
   app.use('/api', paymentsRouter);
+  // Standard Checkout - POST /api/create-order and POST /api/verify-payment. A
+  // separate file from paymentsRouter because it is a second payment METHOD rather
+  // than more routes for the same one; they share the order row, the audit trail and
+  // the single writer of PAID, and nothing else.
+  app.use('/api', checkoutRouter);
 
   /**
    * Route index. Useful during development, and it documents what is not built
@@ -152,6 +160,10 @@ export function createApp(): Express {
           'POST /api/orders/:id/payment-link (requires { "approved": true })',
           'GET /api/orders/:id/payment',
           'POST /api/orders/:id/payment/refresh',
+        ],
+        checkout: [
+          'POST /api/create-order (Razorpay order for the checkout modal; requires { "approved": true })',
+          'POST /api/verify-payment',
         ],
         webhooks: ['POST /api/webhooks/razorpay'],
       },

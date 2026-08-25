@@ -29,6 +29,13 @@ export const ERROR_CODES = [
   // failed authentication, not a malformed field, and it is the one webhook
   // outcome worth alerting on.
   'INVALID_WEBHOOK_SIGNATURE',
+  // The HMAC over `razorpay_order_id|razorpay_payment_id` did not match the
+  // `razorpay_signature` the browser returned from Razorpay's checkout modal.
+  // Separate from INVALID_WEBHOOK_SIGNATURE because the two arrive by different
+  // routes and mean different things: a bad webhook signature is an unauthenticated
+  // caller pretending to be Razorpay, while a bad checkout signature is a client
+  // returning values Razorpay did not issue. Neither can move an order to PAID.
+  'INVALID_PAYMENT_SIGNATURE',
   // 401 / 403
   'UNAUTHENTICATED',
   'FORBIDDEN',

@@ -378,42 +378,60 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
 
       recordOrderId(order.id);
 
-      // The financial action. In real mode this is POST /api/orders/:id/payment-link,
-      // which the backend refuses without an explicit approval; in mock mode it is the
-      // labelled local overlay. Same function either way, so nothing here has to know
-      // which one answered.
+      // ---------------------------------------------------------------------
+      // The payment instrument is NOT chosen here in real mode.
+      //
+      // The confirm click authorises the purchase. It does not answer the separate
+      // question of how to pay, and this codebase does not let one click stand in for
+      // two financial decisions. So the order rests at PENDING_CONFIRMATION and the
+      // payment card offers both instruments, each with its own click, its own
+      // approval reason and its own audited MONEY_ACTION.
+      //
+      // There is also a hard reason. The backend binds exactly ONE instrument per
+      // order - `issuePaymentLink` refuses once a Razorpay order id exists, and
+      // `createCheckoutSession` refuses once a payment link id does, first come wins.
+      // Issuing a link automatically here would mean every order created through chat
+      // had already spent its one slot, and Standard Checkout could never be reached
+      // from the happy path.
+      //
+      // Mock mode keeps the automatic step, because the labelled overlay has no
+      // in-page modal to offer and a walkthrough that reaches no payable state at all
+      // would demonstrate nothing.
+      // ---------------------------------------------------------------------
       let paymentUrl: string | null = null;
       let razorpayOrderId: string | null = order.razorpayOrderId;
       let paymentLinkId: string | null = order.razorpayPaymentLinkId;
       let paymentLinkError: string | null = null;
       let payable = order;
 
-      try {
-        setPhase('generating-link');
-        // The click that reached this function IS the approval, and this sentence is
-        // the reason recorded against the MONEY_ACTION in the audit trail. It names
-        // the product, the quantity and the amount the user was actually shown,
-        // because a justification reading 'user approved' documents nothing a
-        // reviewer could check. The amount is the order row's, not the quote's.
-        const view = await requestPaymentLink(
-          order.id,
-          `Customer authorised purchase of ${args.quantity} x ${args.product.name} for ${order.amountFormatted}.`,
-        );
-        paymentUrl = view.paymentUrl;
-        razorpayOrderId = view.razorpayOrderId;
-        paymentLinkId = view.paymentLinkId;
-        // The row moved to PAYMENT_PENDING server-side, so take the backend's fresher
-        // copy rather than the PENDING_CONFIRMATION one createOrder returned. Without
-        // this the card and the step tracker would report 'no payment link issued' for
-        // an order that already has one.
-        payable = view.order;
-      } catch (error) {
-        // The order above is real and already recorded in Postgres. Letting this
-        // reject would route to onError, which tells the user the order was not
-        // created - false, and an invitation to submit a second one. An order with no
-        // payment link is a real, displayable state, so it is reported as that rather
-        // than as a failure.
-        paymentLinkError = errorMessage(error);
+      if (config.useMock) {
+        try {
+          setPhase('generating-link');
+          // The click that reached this function IS the approval, and this sentence is
+          // the reason recorded against the MONEY_ACTION in the audit trail. It names
+          // the product, the quantity and the amount the user was actually shown,
+          // because a justification reading 'user approved' documents nothing a
+          // reviewer could check. The amount is the order row's, not the quote's.
+          const view = await requestPaymentLink(
+            order.id,
+            `Customer authorised purchase of ${args.quantity} x ${args.product.name} for ${order.amountFormatted}.`,
+          );
+          paymentUrl = view.paymentUrl;
+          razorpayOrderId = view.razorpayOrderId;
+          paymentLinkId = view.paymentLinkId;
+          // The row moved to PAYMENT_PENDING server-side, so take the backend's fresher
+          // copy rather than the PENDING_CONFIRMATION one createOrder returned. Without
+          // this the card and the step tracker would report 'no payment link issued' for
+          // an order that already has one.
+          payable = view.order;
+        } catch (error) {
+          // The order above is real and already recorded in Postgres. Letting this
+          // reject would route to onError, which tells the user the order was not
+          // created - false, and an invitation to submit a second one. An order with no
+          // payment link is a real, displayable state, so it is reported as that rather
+          // than as a failure.
+          paymentLinkError = errorMessage(error);
+        }
       }
 
       return {
@@ -437,10 +455,16 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         {
           id: localId('turn'),
           role: 'assistant',
+          // Three sentences, because the three states are genuinely different and the
+          // middle one used to be asserted for all of them. In real mode nothing has
+          // been issued yet and the card below offers the choice, so claiming a link
+          // exists would describe something the user cannot see.
           content:
             result.paymentLinkError !== null
               ? 'The order is recorded, but no payment link could be issued for it. Nothing has been charged.'
-              : 'Order recorded and a payment link issued. Complete the payment to continue - I will only report success once the payment is verified.',
+              : config.useMock
+                ? 'Order recorded and a payment link issued. Complete the payment to continue - I will only report success once the payment is verified.'
+                : 'Order recorded. Nothing has been charged yet - choose how to pay below, and I will only report success once Razorpay confirms the payment was captured.',
           createdAt: new Date().toISOString(),
           mock: config.useMock,
           blocks: [
