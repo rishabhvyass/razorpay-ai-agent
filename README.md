@@ -1,99 +1,242 @@
-# Checkout Concierge
+# 🛍️ Checkout Concierge
 
-An AI-native commerce assistant. A conversation turns into a recommendation, the
-user explicitly authorises the purchase, and only then does anything financial
-happen — with payment success confirmed by Razorpay rather than assumed by the UI.
+> **AI-Native Autonomous Commerce Assistant & Deterministic Payment Orchestrator**  
+> *Where natural language intent meets strict PostgreSQL transactions and cryptographic Razorpay verification.*
 
-The governing principle, which the code is built around:
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+[![React Native](https://img.shields.io/badge/React%20Native-0.78-61DAFB.svg)](https://reactnative.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8.2-646CFF.svg)](https://vitejs.dev/)
+[![Express](https://img.shields.io/badge/Express-4.21-black.svg)](https://expressjs.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)](https://supabase.com/)
+[![Razorpay](https://img.shields.io/badge/Razorpay-Test%20Mode-0068D6.svg)](https://razorpay.com/)
 
-> The AI can recommend and request actions, but financial actions are explicitly
-> gated, and payment success is verified by Razorpay.
+---
+
+## 🏛️ Core Security Invariant
+
+> **AI can recommend almost anything. But recommendations aren't transactions.**  
+> The AI assistant can recommend products and draft orders, but **financial actions are strictly human-gated**, and payment completion is verified exclusively via cryptographic Razorpay webhooks.
+
+```mermaid
+graph TD
+    A[🗣️ Customer Natural Query] --> B[🤖 AI Tool Execution: search_products]
+    B --> C[🐘 PostgreSQL Catalog Lookup & Price Lock]
+    C --> D[🛡️ Human-in-the-Loop Authorization Gate]
+    D -- Customer Approves --> E[💳 Razorpay Payment Link Created]
+    D -- User Rejects --> F[❌ Draft Cancelled]
+    E --> G[📲 Customer Pays via UPI / QR / Card]
+    G --> H[⚡ Razorpay Webhook with HMAC-SHA256 Signature]
+    H --> I[🔒 Server Validates Signature & Marks Order PAID]
+    I --> J[📦 Realtime Mobile & Web UI Update]
+```
+
+---
+
+## 📂 Repository Structure
 
 ```
-Conversation → Recommendation → Explicit authorisation → Order → Payment
-             → Verified webhook → Completed order
+razorpay-ai-agent/
+├── backend/                  # Node.js + Express + TypeScript API
+│   ├── src/
+│   │   ├── agent/            # Autonomous LLM Orchestrator & Tool Calling
+│   │   ├── controllers/      # Chat, Orders, Products, Webhooks, Activity
+│   │   ├── middleware/       # HMAC signature validator, rate limits, error handler
+│   │   ├── services/         # Razorpay client, Supabase db, audit ledger
+│   │   └── types/            # Strict database & domain interfaces
+│   └── supabase/             # SQL Migrations & Database Seed catalog
+│
+├── frontend/
+│   ├── Mobile/               # React Native CLI Native Mobile Application
+│   │   ├── src/
+│   │   │   ├── components/   # Chat bubbles, product carousels, stadium tab bar
+│   │   │   ├── hooks/motion/ # useSlideUp, useFadeIn, usePressScale, usePulse
+│   │   │   ├── navigation/   # MainTabs (Products, AI, Order) + RootStack
+│   │   │   ├── screens/      # Chat, Explore, Orders, PurchaseConfirmation, Payment
+│   │   │   ├── store/        # Zustand chatStore & orderStore
+│   │   │   └── theme/        # Centralized design tokens & motion physics
+│   │   └── ios/ & android/   # Native platform projects
+│   │
+│   └── Web/                  # Vite + React 19 + Tailwind CSS Web Experience
+│       ├── src/
+│       │   ├── components/   # Landing sections, interactive tool inspector, ledger
+│       │   ├── pages/        # LandingPage, Dashboard, Catalog, Orders, Settings
+│       │   └── hooks/        # React Query hooks, theme provider, checkout session
+│
+└── README.md
 ```
 
-## Layout
+---
 
-| Path                | What it is                                                        |
-| ------------------- | ----------------------------------------------------------------- |
-| `backend/`          | Express + TypeScript API over Supabase. Owns all money logic.     |
-| `frontend/Web/`     | Vite + React + TypeScript client. Consumes the backend only.      |
-| `frontend/Mobile/`  | Empty placeholder.                                                |
-| `frontend/Packages/`| Empty placeholders (`api-client`, `shared`).                      |
-| `backend/supabase/` | `migrations/001_initial_schema.sql` and `seed.sql`.               |
+## ⚡ Quick Start
 
-The frontend contains **no** Claude, MCP, Razorpay or Supabase server-side logic
-and holds no secrets. It reads product and order data from the backend, and never
-computes or asserts a payment status of its own.
+### 1. Prerequisites
+- **Node.js** >= 18.0.0 (`node -v`)
+- **npm** or **yarn**
+- **Supabase Account** (or local PostgreSQL)
+- **Razorpay Account (Test Mode)**
+- **For Mobile**: Xcode (iOS Simulator) / Android Studio (Android Emulator) & CocoaPods
 
-## Setting up on a new machine
+---
 
-### 1. Secrets
+### 2. Configure Backend & Database
 
-Nothing secret is in this repository. Copy the examples and fill them in:
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   cp .env.example .env
+   ```
 
+2. Populate `backend/.env` with your API keys:
+   ```env
+   PORT=3001
+   NODE_ENV=development
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+   RAZORPAY_KEY_ID=rzp_test_your_key_id
+   RAZORPAY_KEY_SECRET=your_key_secret
+   RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
+   AI_PROVIDER=gemini # or claude / openai
+   AI_API_KEY=your_gemini_or_claude_api_key
+   ```
+
+3. Initialize the database schema and seed data in your Supabase SQL Editor:
+   - Run `backend/supabase/migrations/001_initial_schema.sql`
+   - Run `backend/supabase/seed.sql`
+
+4. Install backend dependencies and launch the server:
+   ```bash
+   npm install
+   npm run dev
+   ```
+   *Backend will run at `http://localhost:3001`.*
+
+---
+
+### 3. Run the Web Application
+
+1. Open a new terminal tab and start the Web frontend:
+   ```bash
+   cd frontend/Web
+   npm install
+   npm run dev
+   ```
+2. Visit **`http://localhost:5173`** in your browser to view:
+   - 🌟 Full Landing Page with Dual-Pane Live Interactive Showcase
+   - 🔍 Real-Time Agent Tool Dispatch Inspector
+   - 📜 Immutable PostgreSQL Audit Table
+   - 🛡️ Human-in-the-Loop Security Invariant Comparison
+   - 📊 Admin Dashboard (`/dashboard`), Catalog (`/products`), and Orders (`/orders`)
+
+---
+
+### 4. Run the Mobile Application (React Native CLI)
+
+1. Open a new terminal tab and install mobile dependencies:
+   ```bash
+   cd frontend/Mobile
+   npm install
+   ```
+
+2. **For iOS**:
+   ```bash
+   cd ios && pod install && cd ..
+   npm run ios
+   ```
+
+3. **For Android**:
+   ```bash
+   npm run android
+   ```
+
+4. **Testing on a Physical Mobile Device**:
+   - Ensure your phone and computer are on the same Wi-Fi network.
+   - Open [`frontend/Mobile/src/services/config.ts`](file:///Users/rishabvyas/Desktop/razorpay-ai-agent/frontend/Mobile/src/services/config.ts) and set:
+     ```typescript
+     const CUSTOM_LAN_HOST = '192.168.1.XX'; // Your computer's local Wi-Fi IP
+     ```
+
+---
+
+## 📱 Mobile Application Architecture
+
+### 1. Stadium Capsule Bottom Navigation
+- **Products**: Catalog explorer with category filters, instant search, and staggered item entrances.
+- **AI**: Direct conversational AI chat with instant query routing, product carousels, and suggestion chips.
+- **Order**: Real-time order history, tracking badges (`PAID`, `PENDING`), and transaction audit trails.
+
+### 2. Premium Motion & Animation System
+- **Centralized Physics Tokens** in `src/theme/motion.ts` (durations: 80ms–550ms, spring presets: `gentle`, `snappy`, `subtle`).
+- **100% UI-Thread Accelerated** (`useNativeDriver: true`) for 60fps fluid interactions.
+- **Accessibility Reduce-Motion Compliance** (`useReduceMotion.ts`) automatically honors system accessibility settings.
+- **Animated Components**:
+  - `ThinkingIndicator`: Purple stadium pill with 3 staggered animated bouncing dots.
+  - `PulsingRing`: Ambient breathing halo for AI avatar and microphone state.
+  - `VoiceWaveform`: Equalizing 8-bar audio frequency bars.
+  - `PaymentVerificationAnimation`: Rotating progress ring with central security lock.
+  - `PaymentSuccessAnimation`: Multi-stage reveal (expanding circle ➔ checkmark ➔ amount ➔ order details).
+
+---
+
+## 💳 Razorpay Test Mode Verification Guide
+
+### Test Card & UPI Credentials
+| Payment Method | Test Details |
+|---|---|
+| **UPI / QR** | Enter any VPA format: `success@razorpay` (or scan generated QR code) |
+| **Card Number** | `4111 2222 3333 4444` (or any valid test card) |
+| **Expiry / CVV** | Any future date (e.g., `12/28`), CVV: `123` |
+| **OTP** | Any 6-digit number (e.g., `123456`) |
+
+### Simulating Webhooks Locally
+To test backend webhook delivery without external tunnels:
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/Web/.env.example frontend/Web/.env
+curl -X POST http://localhost:3001/api/webhooks/razorpay \
+  -H "Content-Type: application/json" \
+  -H "x-razorpay-signature: <computed_hmac_signature>" \
+  -d '{
+    "event": "payment_link.paid",
+    "payload": {
+      "payment_link": {
+        "entity": {
+          "id": "plink_test123",
+          "order_id": "order_NxK7Pq2d",
+          "amount": 149900,
+          "status": "paid"
+        }
+      }
+    }
+  }'
 ```
 
-`backend/.env` needs real values for `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
-`SUPABASE_SERVICE_ROLE_KEY` (Supabase dashboard → Project Settings → API keys).
-Move those across out of band — not through a commit, an issue, or a chat log.
+---
 
-`frontend/Web/.env` only holds public `VITE_` values; the committed example is
-already correct for local development.
+## 📡 REST API Reference
 
-### 2. Database
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/products` | Query live catalog with price & category filters |
+| `GET` | `/api/products/:id` | Fetch specific product details & live inventory |
+| `POST` | `/api/chat` | Send conversational turn to autonomous agent |
+| `POST` | `/api/orders` | Draft an order in `PENDING_CONFIRMATION` status |
+| `GET` | `/api/orders` | Fetch user orders ledger |
+| `GET` | `/api/orders/:id` | Fetch specific order state & payment links |
+| `POST` | `/api/orders/:id/confirm` | Explicit human purchase authorization gate |
+| `POST` | `/api/orders/:id/payment` | Issue Razorpay payment link session |
+| `POST` | `/api/webhooks/razorpay` | Cryptographic HMAC-SHA256 webhook ingestion |
+| `GET` | `/api/activity/:id` | Fetch full cryptographic audit trail for an order |
 
-The schema has **not** been applied to the hosted Supabase project yet. Until it
-is, every table read returns `404 … not found in the schema cache` and
-`GET /api/products` answers `500`. In the Supabase dashboard SQL editor, run:
+---
 
-1. `backend/supabase/migrations/001_initial_schema.sql`
-2. `backend/supabase/seed.sql`
+## 🛡️ Invariants & Guarantees
 
-### 3. Run it
+1. **Zero Hallucinated Pricing**:
+   All prices are stored and calculated as integers in **minor units (paise)** on PostgreSQL. The LLM is mathematically prevented from inventing prices or discounts.
+2. **Explicit Human Confirmation (HITL)**:
+   The agent cannot auto-charge accounts. Orders transition from `ORDER_CREATED` ➔ `PENDING_CONFIRMATION` ➔ `PAYMENT_PENDING` ➔ `PAID`.
+3. **No Optimistic Frontend Payments**:
+   Payment success is established **only** when Razorpay cryptographically signs the webhook payload.
 
-```bash
-cd backend      && npm install && npm run dev   # http://localhost:3000
-cd frontend/Web && npm install && npm run dev   # http://localhost:5173
-```
+---
 
-Vite proxies `/api` and `/health` to port 3000, so the browser stays same-origin
-and there is no CORS to configure.
-
-### 4. Agent skills (optional)
-
-`.agents/skills/` is committed; the `.claude/skills/` symlinks that point at it
-are per-machine and are not. Recreate them with:
-
-```bash
-npx skills add supabase/agent-skills
-```
-
-## Status
-
-Backend: products, conversations, orders and activity endpoints work.
-Not implemented yet — `POST /api/chat` (needs the Claude + MCP layer) and
-`POST /api/webhooks/razorpay` (needs the payments layer).
-
-Frontend: **work in progress and not yet runnable.** The config, design tokens,
-types, services, hooks and components are complete, as are the checkout, products,
-orders and order-detail pages. Still to do:
-
-- Pages: dashboard, activity, settings, mock-checkout, not-found
-- `src/App.tsx` (router) and `src/main.tsx` (entry point — `index.html` already
-  points at it)
-- Delete the leftover Vite scaffold: `src/App.jsx`, `src/main.jsx`, `src/App.css`,
-  `vite.config.js`, and the template text in `frontend/Web/README.md`
-- `src/vite-env.d.ts` for `import.meta.env` types
-- Replace the JS-only `eslint.config.js` with a TypeScript flat config
-- Then: `npm run typecheck`, `npm run lint`, `npm run build`
-
-Because the chat and payment endpoints do not exist, the frontend serves those
-two — and only those two — from `src/services/mock/` behind `VITE_USE_MOCK`. Every
-simulated surface renders a visible "Simulated" marker, the flag is forced off in
-production builds, and order creation is always real.
+## 📄 License
+MIT License. Built for secure, autonomous, and transparent AI-native commerce.

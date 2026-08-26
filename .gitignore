@@ -11,19 +11,25 @@
 
 # Dependencies
 node_modules/
+**/node_modules/
 
 # Build output
 dist/
 dist-ssr/
 build/
+**/build/
 *.tsbuildinfo
 
+# React Native iOS / Android build artifacts
+**/Pods/
+**/*.xcworkspace/xcuserdata
+**/*.xcuserdatad
+**/*.xcuserstate
+**/android/app/build/
+**/.gradle/
+**/android/build/
+
 # Claude Code / agent-skills local state
-#
-# settings.local.json is per-machine permissions. .claude/skills/ holds absolute
-# symlinks into this machine's filesystem, so committing them would produce
-# broken links on any other device - recreate them with:
-#   npx skills add supabase/agent-skills
 .claude/settings.local.json
 .claude/skills/
 
@@ -31,8 +37,7 @@ build/
 supabase/.branches/
 supabase/.temp/
 
-# Generated setup SQL. Derived from migrations/ + seed.sql by `npm run db:sql`,
-# so committing it would mean two copies of the schema that can drift apart.
+# Generated setup SQL
 supabase/setup.generated.sql
 
 # Logs
@@ -52,8 +57,4 @@ Thumbs.db
 *.suo
 *.swp
 
-# Throwaway working directory. Anything an agent or a script writes here is
-# probe output, one-off notes, or a scratch response body from an API it was
-# testing - none of it belongs in history, and some of it may echo a request
-# that carried a credential.
 .scratch/

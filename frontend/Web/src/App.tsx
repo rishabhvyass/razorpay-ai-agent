@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/hooks/useTheme';
 import { ActivityPage } from '@/pages/ActivityPage';
 import { CheckoutPage } from '@/pages/CheckoutPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { LandingPage } from '@/pages/LandingPage';
 import { MockCheckoutPage } from '@/pages/MockCheckoutPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { OrderDetailPage } from '@/pages/OrderDetailPage';
@@ -22,28 +23,27 @@ export function App() {
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <CheckoutSessionProvider>
-            <Routes>
-              <Route element={<AppShell />}>
-                <Route index element={<DashboardPage />} />
-                <Route path="checkout" element={<CheckoutPage />} />
-                <Route path="products" element={<ProductsPage />} />
-                <Route path="orders" element={<OrdersPage />} />
-                <Route path="orders/:id" element={<OrderDetailPage />} />
-                <Route path="activity" element={<ActivityPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                {/*
-                  The mock adapter's stand-in checkout, reachable only while
-                  VITE_USE_MOCK is on. Its URL comes from the mock adapter, never
-                  from a provider - this app does not construct Razorpay links.
-                */}
-                <Route path="mock-checkout/:orderId" element={<MockCheckoutPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Route>
-            </Routes>
-          </CheckoutSessionProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ThemeProvider>
-  </ErrorBoundary>
-);
+              <Routes>
+                {/* Full-width Landing Page Homepage */}
+                <Route path="/" element={<LandingPage />} />
+
+                {/* Dashboard & Workspace App Shell */}
+                <Route element={<AppShell />}>
+                  <Route path="dashboard" element={<DashboardPage />} />
+                  <Route path="checkout" element={<CheckoutPage />} />
+                  <Route path="products" element={<ProductsPage />} />
+                  <Route path="orders" element={<OrdersPage />} />
+                  <Route path="orders/:id" element={<OrderDetailPage />} />
+                  <Route path="activity" element={<ActivityPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="mock-checkout/:orderId" element={<MockCheckoutPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Route>
+              </Routes>
+            </CheckoutSessionProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
 }
