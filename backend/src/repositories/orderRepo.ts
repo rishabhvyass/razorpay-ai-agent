@@ -575,3 +575,28 @@ export async function getConversationOrders(conversationId: string): Promise<Pub
 
   return (data ?? []).map(toPublicOrder);
 }
+
+/**
+ * Find an active open order in a conversation for a specific product.
+ * Used by the Money Action Policy to prevent accidental duplicate order creation.
+ */
+export async function findOpenOrderByConversationAndProduct(
+  conversationId: string,
+  productId: string,
+): Promise<PublicOrder | null> {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select(ORDER_COLUMNS)
+    .eq('conversation_id', conversationId)
+    .eq('product_id', productId)
+    .in('status', ['PENDING_CONFIRMATION', 'ORDER_CREATED', 'PAYMENT_PENDING'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error !== null) {
+    throw fromPostgrestError(error, { operation: 'findOpenOrderByConversationAndProduct' });
+  }
+
+  return data === null ? null : toPublicOrder(data);
+}

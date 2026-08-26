@@ -25,7 +25,6 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
     // Proxying in dev keeps the browser same-origin, so there is no CORS
     // preflight to configure and no absolute URL baked into the bundle.
     // Production points VITE_API_URL at the real host instead.

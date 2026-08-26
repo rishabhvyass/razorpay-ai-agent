@@ -735,49 +735,64 @@ export async function refreshPaymentStatus(
     throw notFound('ORDER_NOT_FOUND', 'Order not found');
   }
 
-  // Standard Checkout leaves a Razorpay order id and no link. Read every payment
-  // attempted against it and act on the decisive one - which is how an order paid in
-  // the modal reaches PAID on a backend Razorpay cannot webhook, and how a customer
-  // who closed the tab mid-payment is still recorded as having paid.
-  if (order.razorpayPaymentLinkId === null && order.razorpayOrderId !== null) {
-    const payment = decisivePayment(await fetchOrderPayments(order.razorpayOrderId));
+  const reconAction = await startAgentAction({
+    toolName: 'reconcile_payment',
+    actionType: 'PAYMENT_RECONCILIATION',
+    orderId: order.id,
+    conversationId: order.conversationId,
+    reason: 'Payment status refreshed from Razorpay because webhook confirmation was not yet received.',
+    input: { orderId: order.id, status: order.status },
+    requestId: context.requestId,
+  });
 
-    if (payment === null) {
+  try {
+    // Standard Checkout leaves a Razorpay order id and no link. Read every payment
+    // attempted against it and act on the decisive one.
+    if (order.razorpayPaymentLinkId === null && order.razorpayOrderId !== null) {
+      const payment = decisivePayment(await fetchOrderPayments(order.razorpayOrderId));
+
+      if (payment === null) {
+        await completeAgentAction(reconAction.id, { result: 'No payments found on provider yet' }, order.id);
+        return getPaymentView(order.id);
+      }
+
+      await capturePaymentIfAuthorised(order, payment, context);
+      await completeAgentAction(reconAction.id, { result: 'Reconciled standard checkout payment', paymentStatus: payment.status }, order.id);
       return getPaymentView(order.id);
     }
 
-    // Same capture rule as the browser-return path, deliberately: an authorised
-    // payment found by reconciliation is exactly as uncollected as one found by the
-    // success handler, and must not settle the order either.
-    await capturePaymentIfAuthorised(order, payment, context);
+    if (order.razorpayPaymentLinkId === null) {
+      await failAgentAction(reconAction.id, 'VALIDATION_ERROR', 'No payment has been started for this order.');
+      throw badRequest(
+        'VALIDATION_ERROR',
+        'No payment has been started for this order, so there is nothing to reconcile.',
+        { orderId: order.id, status: order.status },
+      );
+    }
+
+    const link = await fetchPaymentLink(order.razorpayPaymentLinkId);
+
+    if (
+      typeof link.reference_id === 'string' &&
+      link.reference_id !== '' &&
+      link.reference_id !== order.id
+    ) {
+      await failAgentAction(reconAction.id, 'REFERENCE_MISMATCH', 'Payment link references a different order.');
+      throw internal(
+        `Payment link ${link.id} is stored on order ${order.id} but references a different order`,
+      );
+    }
+
+    await applyProviderState(order, providerStateFromLink(link), context);
+    await completeAgentAction(reconAction.id, { result: 'Reconciled payment link', linkStatus: link.status }, order.id);
 
     return getPaymentView(order.id);
+  } catch (error) {
+    await failAgentAction(
+      reconAction.id,
+      'RECONCILIATION_FAILED',
+      error instanceof Error ? error.message : 'Reconciliation failed',
+    ).catch(() => undefined);
+    throw error;
   }
-
-  if (order.razorpayPaymentLinkId === null) {
-    throw badRequest(
-      'VALIDATION_ERROR',
-      'No payment has been started for this order, so there is nothing to reconcile.',
-      { orderId: order.id, status: order.status },
-    );
-  }
-
-  const link = await fetchPaymentLink(order.razorpayPaymentLinkId);
-
-  // A link whose reference_id is not this order means our stored link id points at
-  // someone else's payment. Refusing is the only safe move: applying it would
-  // settle this order with another customer's money.
-  if (
-    typeof link.reference_id === 'string' &&
-    link.reference_id !== '' &&
-    link.reference_id !== order.id
-  ) {
-    throw internal(
-      `Payment link ${link.id} is stored on order ${order.id} but references a different order`,
-    );
-  }
-
-  await applyProviderState(order, providerStateFromLink(link), context);
-
-  return getPaymentView(order.id);
 }

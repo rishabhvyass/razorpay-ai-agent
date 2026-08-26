@@ -60,6 +60,10 @@ import {
   type ProviderPaymentState,
 } from '../services/paymentService.js';
 import { fetchPayment } from '../services/razorpayClient.js';
+import {
+  startAgentAction,
+  completeAgentAction,
+} from '../repositories/agentActionRepo.js';
 import { badRequest, isAppError, paymentNotConfigured } from '../utils/errors.js';
 
 export const webhooksRouter = Router();
@@ -449,6 +453,23 @@ webhooksRouter.post('/razorpay', async (req, res) => {
     const result = await applyDelivery(order, body, req.requestId);
 
     await markEventProcessed(event.id, order.id);
+
+    // Audit the verified webhook delivery
+    await startAgentAction({
+      toolName: 'razorpay_webhook',
+      actionType: 'WEBHOOK_VERIFICATION',
+      orderId: order.id,
+      conversationId: order.conversationId,
+      reason: `Razorpay webhook event "${body.event}" verified with valid HMAC-SHA256 signature.`,
+      input: { event: body.event, providerEventId, orderId: order.id },
+      requestId: req.requestId,
+    }).then(async (act) => {
+      await completeAgentAction(
+        act.id,
+        { applied: result.applied, note: result.note, status: result.order.status },
+        order.id,
+      );
+    }).catch(() => undefined);
 
     res.json({
       data: {

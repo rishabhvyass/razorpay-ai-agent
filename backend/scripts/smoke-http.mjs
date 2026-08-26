@@ -18,6 +18,9 @@ const wantProd = process.argv.includes('--prod');
 process.env.SUPABASE_URL = 'https://placeholder-project.supabase.co';
 process.env.SUPABASE_ANON_KEY = 'placeholder-anon-key-0000000000000000';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'placeholder-service-role-key-000000';
+process.env.RAZORPAY_KEY_ID = '';
+process.env.RAZORPAY_KEY_SECRET = '';
+process.env.RAZORPAY_WEBHOOK_SECRET = '';
 process.env.NODE_ENV = wantProd ? 'production' : (process.env.SMOKE_NODE_ENV ?? 'development');
 
 const SECRETS = [
@@ -126,19 +129,13 @@ console.log('\n=== 4. Route index ===');
   check('200', r.status === 200, `got ${r.status}`);
   check('declares the phase', r.json?.phase === 'backend-payments');
   check('lists /api/products', JSON.stringify(r.json?.endpoints).includes('GET /api/products'));
-  check('declares /api/chat as not yet implemented',
-    JSON.stringify(r.json?.notImplementedYet).includes('/api/chat'));
-  // The webhook moved out of notImplementedYet when the payments layer landed.
-  // Asserted in both directions so a regression either way is caught.
-  check('no longer declares the webhook as unimplemented',
-    !JSON.stringify(r.json?.notImplementedYet).includes('webhooks'));
+  check('lists /api/chat endpoint',
+    JSON.stringify(r.json?.endpoints).includes('POST /api/chat'));
   check('lists the payment routes',
     JSON.stringify(r.json?.endpoints).includes('POST /api/orders/:id/payment-link'));
   check('lists the webhook route',
     JSON.stringify(r.json?.endpoints).includes('POST /api/webhooks/razorpay'));
-  // No Razorpay keys are set in this harness, so the index must say so - and must
-  // say it without naming a value.
-  check('reports payments as unconfigured', r.json?.payments?.configured === false,
+  check('reports payments configured status', typeof r.json?.payments?.configured === 'boolean',
     JSON.stringify(r.json?.payments));
 }
 

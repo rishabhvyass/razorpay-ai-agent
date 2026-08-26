@@ -39,6 +39,9 @@ import {
 import {
   issuePaymentLink,
 } from '../services/paymentService.js';
+import {
+  enforceMoneyActionPolicy,
+} from '../policy/moneyActionPolicy.js';
 
 // -----------------------------------------------------------------------------
 // Tool definitions — the schema Claude sees
@@ -457,8 +460,38 @@ async function execCreateOrder(
 
   const quantity = typeof input.quantity === 'number' ? Math.max(1, Math.trunc(input.quantity)) : 1;
 
-  const order = await createOrderRecord({
+  // Enforce Policy Layer (Authorization, Price calculation from DB, Bounds, Stock, Idempotency)
+  const policy = await enforceMoneyActionPolicy({
+    actionType: 'CREATE_ORDER',
+    conversationId: ctx.conversationId,
     productId,
+    quantity,
+    userApproved: ctx.userApproved,
+    requestId: ctx.requestId,
+  });
+
+  // If an active order for this product already exists in this conversation, reuse it idempotently
+  if (policy.idempotentExistingOrder) {
+    const existing = policy.idempotentExistingOrder;
+    return {
+      result: [
+        `Reusing existing open order (Idempotent):`,
+        formatOrder(existing),
+        '',
+        'The order is already created. To proceed with payment, call create_payment_link.',
+      ].join('\n'),
+      output: {
+        orderId: existing.id,
+        status: existing.status,
+        amount: existing.amount,
+        idempotent: true,
+      },
+      orderId: existing.id,
+    };
+  }
+
+  const order = await createOrderRecord({
+    productId: policy.product!.id,
     quantity,
     conversationId: ctx.conversationId,
   });
@@ -483,6 +516,16 @@ async function execCreatePaymentLink(
   if (typeof orderId !== 'string') {
     return { result: 'Error: order_id is required.', output: { error: 'missing_order_id' } };
   }
+
+  // Enforce Policy Layer (Authorization, State machine validation)
+  await enforceMoneyActionPolicy({
+    actionType: 'CREATE_PAYMENT_LINK',
+    conversationId: ctx.conversationId,
+    orderId,
+    userApproved: ctx.userApproved,
+    approvalReason: 'User explicitly approved purchase in conversation.',
+    requestId: ctx.requestId,
+  });
 
   const view = await issuePaymentLink({
     orderId,
