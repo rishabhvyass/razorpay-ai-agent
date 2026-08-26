@@ -7,6 +7,7 @@ import {
   FlaskConical,
   Link2Off,
   Lock,
+  Palette,
   RotateCcw,
   ShieldCheck,
   Trash2,
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui';
 import { useHealth } from '@/hooks/useHealth';
 import { useCheckoutSession } from '@/hooks/useCheckoutSession';
+import { ThemeSegmentedControl } from '@/hooks/useTheme';
 import { NOT_IMPLEMENTED_ENDPOINTS, config } from '@/lib/config';
 import { truncateId } from '@/lib/format';
 import {
@@ -102,8 +104,22 @@ export function SettingsPage() {
   const apiOrigin = config.apiUrl === '' ? window.location.origin : config.apiUrl;
 
   return (
-    <Page title="Settings" description="Configuration, and what this build does and does not do">
+    <Page title="Settings" description="Configuration, appearance, and system status">
       <div className="max-w-3xl space-y-6">
+        {/* ------------------------------------------------------------------ */}
+        <Section title="Appearance" description="Switch between dark and light modes">
+          <Card padded={false}>
+            <div className="border-line flex items-center justify-between gap-3 border-b px-4 py-3.5">
+              <CardHeader
+                title="Interface Theme"
+                description="Choose your preferred visual theme for the application"
+                icon={<Palette className="size-4" aria-hidden />}
+              />
+              <ThemeSegmentedControl />
+            </div>
+          </Card>
+        </Section>
+
         {/* ------------------------------------------------------------------ */}
         <Section title="Backend" description="Where the data on every other page comes from">
           <Card padded={false}>

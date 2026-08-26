@@ -16,28 +16,86 @@
    --------------------------------------------------------------------------- */
 @theme {
   /* Surfaces */
-  --color-canvas: #f7f8fa;
-  --color-surface: #ffffff;
-  --color-surface-subtle: #fbfcfd;
-  --color-surface-sunken: #f2f4f7;
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface-subtle: var(--color-surface-subtle);
+  --color-surface-sunken: var(--color-surface-sunken);
 
-  /* Text - all three levels carry information (column headers, the provenance
-     line under a metric, every timestamp), so all three clear AA at 4.5:1
-     against the worst surface they land on, which is surface-sunken rather than
-     white. `faint` was 2.39:1 there - the line saying where a dashboard figure
-     came from was the least readable text on the page. Darkening `faint` alone
-     would have parked it on top of `muted`, so the whole ramp steps down and
-     keeps its spacing: 5.9 / 36.0 / 45.7 in CIE L*, a ~10-point gap per level.
-     Ratios below are vs surface / surface-subtle / surface-sunken. */
-  --color-ink: #111318;
-  --color-muted: #4f555f; /* 7.51 / 7.31 / 6.81 - was #68707d at 5.00 / 4.86 / 4.54 */
-  --color-faint: #646d7b; /* 5.23 / 5.09 / 4.75 - was #98a0ac at 2.64 / 2.57 / 2.39 */
+  /* Text */
+  --color-ink: var(--color-ink);
+  --color-muted: var(--color-muted);
+  --color-faint: var(--color-faint);
 
   /* Lines */
-  --color-line: #e5e7eb;
-  --color-line-strong: #d5d9e0;
+  --color-line: var(--color-line);
+  --color-line-strong: var(--color-line-strong);
 
   /* Accent - AI + primary actions */
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-200: var(--color-accent-200);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent: var(--color-accent);
+  --color-accent-700: var(--color-accent-700);
+  --color-accent-900: var(--color-accent-900);
+
+  /* Status */
+  --color-success: var(--color-success);
+  --color-success-bg: var(--color-success-bg);
+  --color-success-line: var(--color-success-line);
+
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-warning-line: var(--color-warning-line);
+
+  --color-danger: var(--color-danger);
+  --color-danger-bg: var(--color-danger-bg);
+  --color-danger-line: var(--color-danger-line);
+
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+  --color-info-line: var(--color-info-line);
+
+  /* Razorpay brand */
+  --color-razorpay: #0068d6;
+
+  /* Type */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  /* Radii */
+  --radius-card: 1rem;
+  --radius-control: 0.625rem;
+
+  /* Soft modern shadows */
+  --shadow-subtle: var(--shadow-subtle);
+  --shadow-card: var(--shadow-card);
+  --shadow-lifted: var(--shadow-lifted);
+
+  /* Micro-interactions */
+  --animate-fade-up: fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-in: fade-in 0.2s ease-out both;
+  --animate-slide-in-right: slide-in-right 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
+  --animate-thinking: thinking 1.4s ease-in-out infinite;
+  --animate-check-pop: check-pop 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+:root {
+  /* Light Theme (Default) */
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f1f5f9;
+  --color-surface-sunken: #e2e8f0;
+
+  --color-ink: #0f172a;
+  --color-muted: #475569;
+  --color-faint: #64748b;
+
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
+
   --color-accent-50: #eef2ff;
   --color-accent-100: #e0e7ff;
   --color-accent-200: #c7d2fe;
@@ -47,60 +105,69 @@
   --color-accent-700: #4338ca;
   --color-accent-900: #312e81;
 
-  /* Status. The foreground of each pair is what Badge.tsx sets on the matching
-     `-bg` tint at 11px/500, and on /orders that label is the only per-row
-     carrier of state: at 3.07:1 against 3.15:1, "Payment pending" and "Paid"
-     were not separable, so the never-colour-alone rule above (WCAG 1.4.1) held
-     while the contrast rule (1.4.3) did not. Each foreground therefore drops one
-     step darker on its own ramp. The tints stay put because they double as
-     surface fills (ui/Card.tsx) and lightening them would wash those out. The
-     ratio noted is the foreground on its own `-bg`; the same change repairs the
-     solid fills, where `bg-success text-white` in PaymentSteps was 3.30:1 and is
-     now 5.02:1. */
-  --color-success: #15803d; /* 4.79:1 - was #16a34a at 3.15:1 */
+  --color-success: #15803d;
   --color-success-bg: #f0fdf4;
   --color-success-line: #bbf7d0;
 
-  --color-warning: #b45309; /* 4.84:1 - was #d97706 at 3.07:1 */
+  --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-warning-line: #fde68a;
 
-  --color-danger: #b91c1c; /* 5.91:1 - was #dc2626 at 4.41:1 */
+  --color-danger: #b91c1c;
   --color-danger-bg: #fef2f2;
   --color-danger-line: #fecaca;
 
-  --color-info: #0369a1; /* 5.57:1 - was #0284c7 at 3.84:1 */
+  --color-info: #0369a1;
   --color-info-bg: #f0f9ff;
   --color-info-line: #bae6fd;
 
-  /* Razorpay brand - used only in payment / test-mode context, never as chrome.
-     There is no ramp to step down, and Badge.tsx pairs it with info-bg where the
-     brand value missed even the 3:1 non-text floor, so the hue and saturation are
-     held exactly and only lightness moves: hsl(211 100% 60%) -> hsl(211 100% 42%). */
-  --color-razorpay: #0068d6; /* 4.99:1 on info-bg - was #3395ff at 2.86:1 */
+  --shadow-subtle: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 4px 14px -2px rgb(15 23 42 / 0.08);
+  --shadow-lifted: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 12px 32px -4px rgb(15 23 42 / 0.12);
+}
 
-  /* Type */
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, monospace;
+.dark, [data-theme="dark"] {
+  /* Dark Theme */
+  --color-canvas: #090d16;
+  --color-surface: #111827;
+  --color-surface-subtle: #172033;
+  --color-surface-sunken: #0c1220;
 
-  /* Radii - rounded but not pill-shaped */
-  --radius-card: 0.875rem;
-  --radius-control: 0.625rem;
+  --color-ink: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-faint: #64748b;
 
-  /* Soft, low-contrast shadows. Depth via subtlety, not drama. */
-  --shadow-subtle: 0 1px 2px 0 rgb(17 19 24 / 0.04), 0 1px 3px 0 rgb(17 19 24 / 0.03);
-  --shadow-card: 0 1px 2px 0 rgb(17 19 24 / 0.04), 0 4px 12px -2px rgb(17 19 24 / 0.06);
-  --shadow-lifted: 0 2px 4px -1px rgb(17 19 24 / 0.06), 0 12px 28px -6px rgb(17 19 24 / 0.12);
+  --color-line: #1e293b;
+  --color-line-strong: #334155;
 
-  /* Micro-interactions - short, professional. Nothing bounces. */
-  --animate-fade-up: fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-fade-in: fade-in 0.2s ease-out both;
-  --animate-slide-in-right: slide-in-right 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
-  --animate-thinking: thinking 1.4s ease-in-out infinite;
-  --animate-check-pop: check-pop 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --color-accent-50: #1e1b4b;
+  --color-accent-100: #312e81;
+  --color-accent-200: #3730a3;
+  --color-accent-300: #4338ca;
+  --color-accent-500: #6366f1;
+  --color-accent: #6366f1;
+  --color-accent-700: #818cf8;
+  --color-accent-900: #e0e7ff;
+
+  --color-success: #4ade80;
+  --color-success-bg: #052e16;
+  --color-success-line: #14532d;
+
+  --color-warning: #fbbf24;
+  --color-warning-bg: #451a03;
+  --color-warning-line: #78350f;
+
+  --color-danger: #f87171;
+  --color-danger-bg: #450a0a;
+  --color-danger-line: #7f1d1d;
+
+  --color-info: #38bdf8;
+  --color-info-bg: #082f49;
+  --color-info-line: #075985;
+
+  --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 4px 16px -2px rgb(0 0 0 / 0.6);
+  --shadow-lifted: 0 6px 12px -2px rgb(0 0 0 / 0.6), 0 16px 40px -6px rgb(0 0 0 / 0.8);
 }
 
 @keyframes fade-up {

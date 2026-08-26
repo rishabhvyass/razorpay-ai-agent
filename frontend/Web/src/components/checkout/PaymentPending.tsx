@@ -89,11 +89,34 @@ export function PaymentPending({
         once Razorpay confirms the payment was captured.
       </p>
 
+      {!isMock && (
+        <div className="rounded-control border border-accent/20 bg-accent-50/50 p-3 text-xs dark:bg-accent-50/10">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ink font-semibold flex items-center gap-1.5">
+              💳 Test Card Details (Guaranteed Success):
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText('4000000000000002');
+              }}
+              className="text-accent font-medium hover:underline text-[11px]"
+            >
+              Copy Number
+            </button>
+          </div>
+          <div className="mt-1.5 grid grid-cols-2 gap-2 text-muted text-[11px] font-mono">
+            <div>Card: <span className="text-ink font-medium">4000 0000 0000 0002</span></div>
+            <div>Expiry: <span className="text-ink font-medium">12/28</span> | CVV: <span className="text-ink font-medium">123</span></div>
+          </div>
+        </div>
+      )}
+
       {paymentUrl ? (
         isInternal ? (
           <Link
             to={paymentUrl}
-            className="bg-accent hover:bg-accent-700 rounded-control inline-flex h-10 w-full items-center justify-center gap-2 px-4 text-sm font-medium text-white transition-colors"
+            className="bg-accent hover:bg-accent-700 rounded-control inline-flex h-10 w-full items-center justify-center gap-2 px-4 text-sm font-medium text-white transition-colors shadow-subtle hover:scale-[1.01] active:scale-[0.99]"
           >
             Open simulated checkout
             <ExternalLink className="size-3.5" aria-hidden />
@@ -103,9 +126,9 @@ export function PaymentPending({
             href={paymentUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-accent hover:bg-accent-700 rounded-control inline-flex h-10 w-full items-center justify-center gap-2 px-4 text-sm font-medium text-white transition-colors"
+            className="bg-accent hover:bg-accent-700 rounded-control inline-flex h-10 w-full items-center justify-center gap-2 px-4 text-sm font-medium text-white transition-colors shadow-subtle hover:scale-[1.01] active:scale-[0.99]"
           >
-            Complete payment
+            Complete payment on Razorpay
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         )

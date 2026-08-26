@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Check, CreditCard, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const MAX_LENGTH = 500;
@@ -27,6 +27,7 @@ export function MessageInput({
   autoFocus?: boolean;
 }) {
   const [value, setValue] = useState('');
+  const [copiedCard, setCopiedCard] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Autosize. Reset to `auto` first, or the height only ever grows.
@@ -51,15 +52,71 @@ export function MessageInput({
     }
   };
 
+  const copyTestCard = () => {
+    void navigator.clipboard.writeText('4000000000000002');
+    setCopiedCard(true);
+    setTimeout(() => setCopiedCard(false), 2000);
+  };
+
   const canSend = value.trim() !== '' && !disabled;
   const nearLimit = value.length > MAX_LENGTH - 60;
 
   return (
-    <div className="border-line bg-surface/90 border-t px-4 py-3 backdrop-blur-md md:px-6">
+    <div className="border-line bg-surface/90 border-t px-4 py-3 backdrop-blur-md transition-colors duration-200 md:px-6">
+      {/* Test mode quick badge */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+          <button
+            type="button"
+            onClick={() => onSend('Show me all categories')}
+            disabled={disabled}
+            className="border-line bg-surface-subtle text-muted hover:border-accent-200 hover:bg-accent-50 hover:text-accent inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all"
+          >
+            <Sparkles className="size-3 text-accent" />
+            <span>Categories</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onSend('Find running shoes under 3500')}
+            disabled={disabled}
+            className="border-line bg-surface-subtle text-muted hover:border-accent-200 hover:bg-accent-50 hover:text-accent inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all"
+          >
+            <span>🏃 Shoes &lt; ₹3.5k</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onSend('Find a black hoodie')}
+            disabled={disabled}
+            className="border-line bg-surface-subtle text-muted hover:border-accent-200 hover:bg-accent-50 hover:text-accent inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all"
+          >
+            <span>🧥 Black Hoodies</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={copyTestCard}
+          title="Copy Razorpay Domestic Test Card Number"
+          className="border-line bg-surface-sunken hover:bg-surface text-muted hover:text-ink inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-mono transition-colors"
+        >
+          {copiedCard ? (
+            <>
+              <Check className="size-3 text-success" />
+              <span className="text-success font-sans">Copied 4000...0002</span>
+            </>
+          ) : (
+            <>
+              <CreditCard className="size-3 text-razorpay" />
+              <span>Test Card: 4000 0000 0000 0002</span>
+            </>
+          )}
+        </button>
+      </div>
+
       <div
         className={cn(
-          'rounded-card border-line-strong bg-surface flex items-end gap-2 border px-3 py-2 transition-colors',
-          'focus-within:border-accent-300 focus-within:ring-accent-100 focus-within:ring-2',
+          'rounded-card border-line-strong bg-surface flex items-end gap-2 border px-3 py-2 transition-all shadow-subtle',
+          'focus-within:border-accent focus-within:ring-accent/20 focus-within:ring-2',
         )}
       >
         <label htmlFor="chat-input" className="sr-only">
@@ -86,7 +143,7 @@ export function MessageInput({
           className={cn(
             'grid size-8 shrink-0 place-items-center rounded-lg transition-all duration-150',
             canSend
-              ? 'bg-accent hover:bg-accent-700 text-white'
+              ? 'bg-accent hover:bg-accent-700 text-white shadow-sm hover:scale-105 active:scale-95'
               : 'bg-surface-sunken text-faint cursor-not-allowed',
           )}
         >
@@ -96,13 +153,19 @@ export function MessageInput({
 
       <div className="mt-1.5 flex items-center justify-between gap-3 px-1">
         <p className="text-faint text-[11px]">
-          <kbd className="font-sans font-medium">Enter</kbd> to send ·{' '}
-          <kbd className="font-sans font-medium">Shift+Enter</kbd> for a new line
+          <kbd className="border-line bg-surface-sunken rounded border px-1 font-sans font-medium">Enter</kbd> to send ·{' '}
+          <kbd className="border-line bg-surface-sunken rounded border px-1 font-sans font-medium">Shift+Enter</kbd> for a new line
         </p>
         {nearLimit ? (
-          <p className="text-faint nums text-[11px]">
-            {value.length}/{MAX_LENGTH}
-          </p>
+          <span
+            className={cn(
+              'nums text-[11px]',
+              value.length >= MAX_LENGTH ? 'text-danger font-semibold' : 'text-warning',
+            )}
+            aria-live="polite"
+          >
+            {MAX_LENGTH - value.length} left
+          </span>
         ) : null}
       </div>
     </div>

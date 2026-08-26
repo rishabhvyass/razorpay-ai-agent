@@ -49,7 +49,7 @@ export function MetricCard({
   }[tone];
 
   return (
-    <div className="rounded-card border-line bg-surface border p-4">
+    <div className="rounded-card border-line bg-surface hover:border-line-strong hover:shadow-subtle border p-4 transition-all duration-200">
       <div className="flex items-start justify-between gap-2">
         <p className="text-muted text-[12px] font-medium">{label}</p>
         {icon ? <span className="text-faint shrink-0">{icon}</span> : null}

@@ -1,16 +1,10 @@
 import type { ReactNode } from 'react';
 import { Menu } from 'lucide-react';
 import { useHealth } from '@/hooks/useHealth';
+import { ThemeToggle } from '@/hooks/useTheme';
 import { config } from '@/lib/config';
 import { Badge, MockBadge } from '@/components/ui';
 
-/**
- * Top bar: page identity on the left, honest system state on the right.
- *
- * The connection badge reports the result of a live `GET /health` poll, so it can
- * say "Backend offline" - a status indicator that can only ever show the good state
- * is not an indicator.
- */
 export function Topbar({
   title,
   description,
@@ -31,7 +25,7 @@ export function Topbar({
       : { tone: 'success' as const, label: 'Backend online', pulse: true };
 
   return (
-    <header className="border-line bg-surface/80 sticky top-0 z-20 border-b backdrop-blur-md">
+    <header className="border-line bg-surface/80 sticky top-0 z-20 border-b backdrop-blur-md transition-colors duration-200">
       <div className="flex items-center gap-3 px-4 py-3 md:px-6 md:py-3.5">
         {onOpenNav ? (
           <button
@@ -53,8 +47,9 @@ export function Topbar({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2.5">
           {actions}
+          <ThemeToggle />
           {config.useMock ? <MockBadge className="hidden sm:inline-flex" /> : null}
           <Badge tone={connection.tone} pulse={connection.pulse}>
             <span className="hidden sm:inline">{connection.label}</span>

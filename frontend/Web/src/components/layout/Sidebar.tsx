@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { ThemeSegmentedControl } from '@/hooks/useTheme';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -66,13 +67,18 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </ul>
 
+      {/* Theme selector in sidebar */}
+      <div className="px-3 py-2">
+        <ThemeSegmentedControl className="w-full justify-between" />
+      </div>
+
       {/*
         Test-mode indicator, always visible (spec section 15 / 23). This app never
         touches live money: order creation is a database write and the payments
         layer is Razorpay Test Mode. Saying so permanently is more honest than a
         dismissible banner someone closes on their first visit.
       */}
-      <div className="border-line mt-3 border-t px-4 py-3.5">
+      <div className="border-line mt-1 border-t px-4 py-3.5">
         <div className="flex items-center gap-2">
           <span className="bg-razorpay animate-pulse-soft size-1.5 shrink-0 rounded-full" aria-hidden />
           <span className="text-muted text-[11px] font-medium">Razorpay Test Mode</span>
