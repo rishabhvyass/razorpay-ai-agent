@@ -127,20 +127,44 @@ const envSchema = z
   RAZORPAY_WEBHOOK_SECRET: optionalSecret('RAZORPAY_WEBHOOK_SECRET', 8),
 
   // ---------------------------------------------------------------------------
-  // AgentRouter
+  // Agent (Claude / Anthropic)
   // ---------------------------------------------------------------------------
 
   /**
-   * DECLARED BUT NOT YET CONSUMED.
-   *
-   * The Claude + MCP layer behind `POST /api/chat` is a separate build; no code
-   * reads this today. The slot exists so the key can be set now and so its name
-   * is documented in one place rather than guessed at later.
-   *
-   * BACKEND ONLY when it is used. A model credential in a browser bundle is a
-   * billable resource anyone can spend.
+   * Anthropic, OpenRouter or AgentRouter API key.
    */
   AGENTROUTER_API_KEY: optionalSecret('AGENTROUTER_API_KEY'),
+  OPENROUTER_API_KEY: optionalSecret('OPENROUTER_API_KEY'),
+
+  /**
+   * Which model to use. E.g. tencent/hy3, minimax/minimax-m2.7:free, or claude-sonnet-4-20250514.
+   */
+  ANTHROPIC_MODEL: z.preprocess(
+    blankToUndefined,
+    z.string().min(3).optional(),
+  ),
+
+  /**
+   * Custom base URL for Anthropic / AgentRouter API.
+   * Defaults to https://agentrouter.org when using AgentRouter keys.
+   */
+  ANTHROPIC_BASE_URL: z.preprocess(
+    blankToUndefined,
+    z.string().url().optional(),
+  ),
+
+  /**
+   * xAI / Grok API key (e.g. xai-...).
+   */
+  XAI_API_KEY: optionalSecret('XAI_API_KEY', 10),
+
+  /**
+   * Grok model name. Defaults to grok-4.6 or grok-2-latest.
+   */
+  GROK_MODEL: z.preprocess(
+    blankToUndefined,
+    z.string().min(3).optional(),
+  ),
   })
   .superRefine((value, ctx) => {
     // Report against each missing variable's own path, so the boot-time report
@@ -261,3 +285,50 @@ export const RAZORPAY_ENV_VARS = [
   'RAZORPAY_KEY_SECRET',
   'RAZORPAY_WEBHOOK_SECRET',
 ] as const;
+
+export interface AgentConfig {
+  readonly provider: 'grok' | 'anthropic';
+  readonly apiKey: string;
+  readonly model: string;
+  readonly baseURL?: string;
+}
+
+export const agentConfig: AgentConfig | null = (() => {
+  if (
+    env.XAI_API_KEY !== undefined ||
+    env.AGENTROUTER_API_KEY?.startsWith('xai-')
+  ) {
+    const key = env.XAI_API_KEY ?? env.AGENTROUTER_API_KEY!;
+    return {
+      provider: 'grok',
+      apiKey: key,
+      model: env.GROK_MODEL ?? 'grok-4.6',
+      baseURL: 'https://api.x.ai/v1',
+    };
+  }
+
+  const orKey = env.OPENROUTER_API_KEY ?? env.AGENTROUTER_API_KEY;
+  if (orKey !== undefined) {
+    return {
+      provider: 'anthropic',
+      apiKey: orKey,
+      model:
+        env.ANTHROPIC_MODEL ??
+        (orKey.startsWith('sk-or-')
+          ? 'tencent/hy3'
+          : 'claude-sonnet-4-20250514'),
+      baseURL:
+        env.ANTHROPIC_BASE_URL !== undefined
+          ? env.ANTHROPIC_BASE_URL.replace(/\/v1\/?$/, '')
+          : orKey.startsWith('sk-or-')
+            ? 'https://openrouter.ai/api'
+            : orKey.startsWith('sk-ant-')
+              ? undefined
+              : 'https://agentrouter.org',
+    };
+  }
+
+  return null;
+})();
+
+export const isAgentConfigured = agentConfig !== null;

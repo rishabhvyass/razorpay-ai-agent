@@ -23,6 +23,7 @@ import express from 'express';
 import type { Express } from 'express';
 import { pathToFileURL } from 'node:url';
 
+import { chatRouter } from './api/chat.js';
 import { checkoutRouter } from './api/checkout.js';
 import { conversationsRouter } from './api/conversations.js';
 import { healthRouter } from './api/health.js';
@@ -30,7 +31,7 @@ import { ordersRouter } from './api/orders.js';
 import { paymentsRouter } from './api/payments.js';
 import { productsRouter } from './api/products.js';
 import { webhooksRouter } from './api/webhooks.js';
-import { env, isProduction, isRazorpayConfigured, RAZORPAY_ENV_VARS } from './config/env.js';
+import { env, isProduction, agentConfig, isAgentConfigured, isRazorpayConfigured, RAZORPAY_ENV_VARS } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { REQUEST_ID_HEADER, requestId } from './middleware/requestId.js';
 import { SERVICE_NAME, getReadiness } from './services/healthService.js';
@@ -125,6 +126,8 @@ export function createApp(): Express {
   // than more routes for the same one; they share the order row, the audit trail and
   // the single writer of PAID, and nothing else.
   app.use('/api', checkoutRouter);
+  // Chat — the agent entry point. Claude + MCP tool loop.
+  app.use('/api/chat', chatRouter);
 
   /**
    * Route index. Useful during development, and it documents what is not built
@@ -166,6 +169,7 @@ export function createApp(): Express {
           'POST /api/verify-payment',
         ],
         webhooks: ['POST /api/webhooks/razorpay'],
+        chat: ['POST /api/chat'],
       },
       // Reported so a developer can tell "the route is missing" from "the route is
       // there and this deployment has no keys" without reading server logs. The
@@ -177,7 +181,12 @@ export function createApp(): Express {
           ? {}
           : { note: 'Payment routes return 501 until the Razorpay environment variables are set.' }),
       },
-      notImplementedYet: ['POST /api/chat (needs the Claude + MCP layer)'],
+      agent: {
+        configured: isAgentConfigured,
+        ...(isAgentConfigured
+          ? {}
+          : { note: 'POST /api/chat returns 501 until AGENTROUTER_API_KEY is set.' }),
+      },
       requestId: req.requestId,
     });
   });
@@ -215,6 +224,13 @@ async function main(): Promise<void> {
         isRazorpayConfigured
           ? 'Razorpay configured'
           : `not configured (set ${RAZORPAY_ENV_VARS.join(', ')})`
+      }`,
+    );
+    console.log(
+      `  agent       ${
+        isAgentConfigured
+          ? `${agentConfig?.provider === 'grok' ? 'Grok' : 'Claude'} configured (${agentConfig?.model})`
+          : 'not configured (set XAI_API_KEY or AGENTROUTER_API_KEY)'
       }\n`,
     );
   });

@@ -15,7 +15,7 @@ import { fileURLToPath, URL } from 'node:url';
  * time, and it must NOT be VITE_-prefixed, because a proxy target is a dev-server
  * concern and has no business in the browser bundle.
  */
-const apiProxyTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:3000';
+const apiProxyTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:3001';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

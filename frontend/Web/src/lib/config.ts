@@ -66,16 +66,13 @@ export const config = {
    * real deployment is exactly the failure mode the product principle forbids,
    * so the flag cannot be switched on there even by mistake.
    */
-  useMock: import.meta.env.PROD ? false : flag(import.meta.env.VITE_USE_MOCK, true),
+  useMock: import.meta.env.PROD ? false : flag(import.meta.env.VITE_USE_MOCK, false),
 
   isDev: import.meta.env.DEV,
 } as const;
 
 /**
- * Endpoints the backend has not implemented yet, quoted from its own route
- * index at `GET /`. Surfaced in the UI (Settings page) rather than hidden, so
- * the gap is visible to anyone evaluating the demo.
+ * Endpoints the backend has not implemented yet.
+ * Empty now that POST /api/chat is live!
  */
-export const NOT_IMPLEMENTED_ENDPOINTS = [
-  'POST /api/chat (needs the Claude + MCP layer)',
-] as const;
+export const NOT_IMPLEMENTED_ENDPOINTS: readonly string[] = [];
