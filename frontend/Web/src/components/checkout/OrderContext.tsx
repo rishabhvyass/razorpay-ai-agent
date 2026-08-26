@@ -47,7 +47,7 @@ export function OrderContext({ className }: { className?: string }) {
 
   return (
     <section
-      className={cn('border-line bg-surface border-t px-4 py-3.5', className)}
+      className={cn('border-line bg-surface shrink-0 border-t px-4 py-3.5', className)}
       aria-labelledby="order-context-heading"
     >
       <div className="mb-2.5 flex items-center justify-between gap-3">

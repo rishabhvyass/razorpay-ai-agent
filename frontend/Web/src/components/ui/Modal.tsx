@@ -221,7 +221,7 @@ export function Modal({
           </button>
         </div>
 
-        <div className="scrollbar-slim flex-1 overflow-y-auto">{children}</div>
+        <div className="scrollbar-slim flex-1 min-h-0 overflow-y-auto">{children}</div>
 
         {footer ? <div className="border-line border-t px-5 py-4">{footer}</div> : null}
       </div>

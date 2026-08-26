@@ -45,12 +45,12 @@ export function CheckoutPage() {
         </>
       }
     >
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <ChatWindow />
 
         {!isCompact ? (
-          <aside className="border-line bg-surface-subtle flex w-[22rem] shrink-0 flex-col border-l">
-            <AgentActivityPanel className="flex-1" />
+          <aside className="border-line bg-surface-subtle flex w-[22rem] shrink-0 flex-col border-l min-h-0 h-full overflow-hidden">
+            <AgentActivityPanel className="min-h-0 flex-1" />
             {/* Below the trace, not above it: the trace is scrollable and grows, and
                 the order summary has to stay visible without competing with it for
                 the top of the rail. It renders nothing until an order exists. */}
