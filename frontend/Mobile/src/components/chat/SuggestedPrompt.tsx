@@ -1,9 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { ScalePressable } from '../motion/ScalePressable';
-import { SlideUpView } from '../motion/SlideUpView';
+import { ArrowUpRight } from 'lucide-react-native';
+import { AnimatedPressable } from '../motion/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
 
 interface SuggestedPromptProps {
   prompts: string[];
@@ -15,72 +14,81 @@ export function SuggestedPrompt({ prompts, onSelectPrompt }: SuggestedPromptProp
 
   return (
     <View style={styles.container}>
-      {prompts.map((prompt, idx) => {
-        const isFirst = idx === 0;
-        const delay = Math.min(idx * motion.stagger.fast, 180);
-
-        return (
-          <SlideUpView
-            key={`${prompt}-${idx}`}
-            distance={8}
-            duration={motion.duration.fast}
-            delay={delay}
-          >
-            <ScalePressable
-              pressedScale={motion.scale.buttonPress}
-              onPress={() => onSelectPrompt(prompt)}
+      <Text style={styles.headerLabel}>Suggested questions</Text>
+      <View style={styles.chipRow}>
+        {prompts.map((prompt, index) => {
+          const isFirst = index === 0;
+          return (
+            <AnimatedPressable
+              key={prompt}
               style={[
                 styles.chip,
-                isFirst ? styles.chipFirst : styles.chipSecondary,
+                isFirst && styles.chipHighlight,
               ]}
+              pressScale={0.95}
+              onPress={() => onSelectPrompt(prompt)}
+              accessibilityLabel={`Ask ${prompt}`}
             >
               <Text
                 style={[
                   styles.chipText,
-                  isFirst ? styles.chipTextFirst : styles.chipTextSecondary,
+                  isFirst && styles.chipTextHighlight,
                 ]}
               >
                 {prompt}
               </Text>
-            </ScalePressable>
-          </SlideUpView>
-        );
-      })}
+              <ArrowUpRight
+                size={13}
+                color={isFirst ? colors.primary : colors.textMuted}
+              />
+            </AnimatedPressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    marginVertical: spacing.md,
+    paddingLeft: 36,
+  },
+  headerLabel: {
+    ...typography.captionBold,
+    color: colors.textMuted,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginVertical: spacing.xs + 2,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radius.full,
-    borderWidth: 1,
-  },
-  chipFirst: {
-    backgroundColor: colors.primaryUltraLight,
-    borderColor: colors.testModeBorder,
-  },
-  chipSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
+    borderWidth: 1,
     borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  chipHighlight: {
+    backgroundColor: colors.primarySubtle,
+    borderColor: colors.primarySubtle,
   },
   chipText: {
-    ...typography.captionMedium,
+    ...typography.secondaryMedium,
+    color: colors.textPrimary,
     fontSize: 13,
   },
-  chipTextFirst: {
+  chipTextHighlight: {
     color: colors.primary,
-    fontWeight: '700',
-  },
-  chipTextSecondary: {
-    color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });

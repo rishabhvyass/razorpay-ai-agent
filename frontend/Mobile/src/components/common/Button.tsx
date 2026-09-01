@@ -4,22 +4,27 @@ import {
   StyleSheet,
   Text,
   TextStyle,
-  TouchableOpacity,
-  TouchableOpacityProps,
   View,
   ViewStyle,
 } from 'react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { Check } from 'lucide-react-native';
+import { AnimatedPressable } from '../motion/AnimatedPressable';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
+import { motion } from '../../theme/motion';
 
-export interface ButtonProps extends TouchableOpacityProps {
+export interface ButtonProps {
   title: string;
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
+  success?: boolean;
+  disabled?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  onPress?: () => void;
+  accessibilityLabel?: string;
 }
 
 export function Button({
@@ -27,107 +32,132 @@ export function Button({
   variant = 'primary',
   size = 'md',
   loading = false,
+  success = false,
   disabled = false,
   leftIcon,
   rightIcon,
   style,
   textStyle,
-  ...rest
+  onPress,
+  accessibilityLabel,
 }: ButtonProps) {
-  const isDisabled = disabled || loading;
+  const themeColors = useThemeColors();
+  const isDisabled = disabled || loading || success;
 
   const getContainerStyle = (): ViewStyle => {
+    if (success) {
+      return { backgroundColor: colors.success };
+    }
     switch (variant) {
       case 'secondary':
-        return styles.secondaryContainer;
+        return { backgroundColor: themeColors.primarySubtle };
       case 'outline':
-        return styles.outlineContainer;
+        return {
+          backgroundColor: themeColors.surface,
+          borderWidth: 1,
+          borderColor: themeColors.border,
+        };
       case 'danger':
-        return styles.dangerContainer;
+        return { backgroundColor: themeColors.danger };
       case 'ghost':
-        return styles.ghostContainer;
+        return { backgroundColor: 'transparent' };
+      case 'success':
+        return { backgroundColor: colors.success };
       case 'primary':
       default:
-        return styles.primaryContainer;
+        return { backgroundColor: themeColors.primary };
     }
   };
 
   const getTextStyle = (): TextStyle => {
+    if (success) {
+      return { ...typography.bodyBold, fontSize: 15, color: '#FFFFFF', fontWeight: '600' };
+    }
     switch (variant) {
       case 'secondary':
-        return styles.secondaryText;
+        return { ...typography.bodyBold, fontSize: 15, color: themeColors.primary, fontWeight: '600' };
       case 'outline':
-        return styles.outlineText;
+        return { ...typography.bodyBold, fontSize: 15, color: themeColors.textPrimary, fontWeight: '600' };
       case 'danger':
-        return styles.dangerText;
+        return { ...typography.bodyBold, fontSize: 15, color: '#FFFFFF', fontWeight: '600' };
       case 'ghost':
-        return styles.ghostText;
+        return { ...typography.bodyMedium, fontSize: 15, color: themeColors.textSecondary };
+      case 'success':
+        return { ...typography.bodyBold, fontSize: 15, color: '#FFFFFF', fontWeight: '600' };
       case 'primary':
       default:
-        return styles.primaryText;
+        return { ...typography.bodyBold, fontSize: 15, color: '#FFFFFF', fontWeight: '600' };
     }
   };
 
-  const getSizeStyle = (): { container: ViewStyle; text: TextStyle } => {
+  const getSizeStyle = (): ViewStyle => {
     switch (size) {
       case 'sm':
-        return {
-          container: styles.smContainer,
-          text: styles.smText,
-        };
+        return styles.sizeSm;
       case 'lg':
-        return {
-          container: styles.lgContainer,
-          text: styles.lgText,
-        };
+        return styles.sizeLg;
       case 'md':
       default:
-        return {
-          container: styles.mdContainer,
-          text: styles.mdText,
-        };
+        return styles.sizeMd;
     }
   };
 
-  const sizeStyles = getSizeStyle();
+  const getIndicatorColor = (): string => {
+    switch (variant) {
+      case 'primary':
+      case 'danger':
+      case 'success':
+        return '#FFFFFF';
+      case 'secondary':
+        return themeColors.primary;
+      case 'outline':
+      case 'ghost':
+      default:
+        return themeColors.textPrimary;
+    }
+  };
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      disabled={isDisabled}
+    <AnimatedPressable
       style={[
-        styles.baseContainer,
+        styles.base,
         getContainerStyle(),
-        sizeStyles.container,
-        isDisabled && styles.disabledContainer,
+        getSizeStyle(),
+        variant === 'primary' && !isDisabled && shadows.primaryButton,
+        isDisabled && styles.disabled,
         style,
       ]}
-      accessibilityRole="button"
-      accessibilityLabel={title}
+      disabled={isDisabled}
+      pressScale={motion.scale.buttonPress}
+      onPress={onPress}
+      accessibilityLabel={accessibilityLabel || title}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
-      {...rest}
     >
       {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' || variant === 'danger' ? colors.textInverse : colors.primary}
-        />
+        <View style={styles.contentRow}>
+          <ActivityIndicator size="small" color={getIndicatorColor()} />
+          <Text style={[getTextStyle(), styles.loadingText, textStyle]}>
+            {title.includes('...') ? title : `${title}...`}
+          </Text>
+        </View>
+      ) : success ? (
+        <View style={styles.contentRow}>
+          <Check size={18} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={[getTextStyle(), styles.successLabel, textStyle]}>{title}</Text>
+        </View>
       ) : (
         <View style={styles.contentRow}>
-          {leftIcon ? <View style={styles.iconLeft}>{leftIcon}</View> : null}
-          <Text style={[getTextStyle(), sizeStyles.text, isDisabled && styles.disabledText, textStyle]}>
-            {title}
-          </Text>
-          {rightIcon ? <View style={styles.iconRight}>{rightIcon}</View> : null}
+          {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
+          <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+          {rightIcon ? <View style={styles.rightIcon}>{rightIcon}</View> : null}
         </View>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
 const styles = StyleSheet.create({
-  baseContainer: {
-    borderRadius: radius.md,
+  base: {
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -136,78 +166,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
   },
-  iconLeft: {
-    marginRight: spacing.sm,
+  leftIcon: {
+    marginRight: spacing.xs,
   },
-  iconRight: {
-    marginLeft: spacing.sm,
+  rightIcon: {
+    marginLeft: spacing.xs,
   },
+  loadingText: {
+    marginLeft: spacing.xs,
+  },
+  successLabel: {
+    marginLeft: spacing.xs,
+  },
+
   // Sizes
-  smContainer: {
-    paddingVertical: spacing.xs + 2,
+  sizeSm: {
+    height: 36,
     paddingHorizontal: spacing.md,
+    borderRadius: radius.small,
   },
-  smText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  mdContainer: {
-    paddingVertical: spacing.md,
+  sizeMd: {
+    height: 46,
     paddingHorizontal: spacing.lg,
+    borderRadius: radius.inputs,
   },
-  mdText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  lgContainer: {
-    paddingVertical: spacing.lg - 2,
+  sizeLg: {
+    height: 52,
     paddingHorizontal: spacing.xl,
+    borderRadius: radius.inputs,
   },
-  lgText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  // Variants
-  primaryContainer: {
-    backgroundColor: colors.primary,
-  },
-  primaryText: {
-    color: colors.textInverse,
-  },
-  secondaryContainer: {
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  secondaryText: {
-    color: colors.textPrimary,
-  },
-  outlineContainer: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  outlineText: {
-    color: colors.textPrimary,
-  },
-  dangerContainer: {
-    backgroundColor: colors.danger,
-  },
-  dangerText: {
-    color: colors.textInverse,
-  },
-  ghostContainer: {
-    backgroundColor: 'transparent',
-  },
-  ghostText: {
-    color: colors.accent,
-  },
-  // Disabled
-  disabledContainer: {
+
+  disabled: {
     opacity: 0.5,
-  },
-  disabledText: {
-    color: colors.textMuted,
   },
 });

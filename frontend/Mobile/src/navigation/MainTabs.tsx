@@ -11,19 +11,12 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export function MainTabs() {
   return (
     <Tab.Navigator
-      initialRouteName="ProductsTab"
+      initialRouteName="AITab"
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
       }}
     >
-      <Tab.Screen
-        name="ProductsTab"
-        component={ExploreScreen}
-        options={{
-          tabBarLabel: 'Products',
-        }}
-      />
       <Tab.Screen
         name="AITab"
         component={ChatScreen}
@@ -32,10 +25,17 @@ export function MainTabs() {
         }}
       />
       <Tab.Screen
+        name="ProductsTab"
+        component={ExploreScreen}
+        options={{
+          tabBarLabel: 'Products',
+        }}
+      />
+      <Tab.Screen
         name="OrdersTab"
         component={OrdersScreen}
         options={{
-          tabBarLabel: 'Order',
+          tabBarLabel: 'Orders',
         }}
       />
     </Tab.Navigator>

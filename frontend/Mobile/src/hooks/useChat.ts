@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatService } from '../services/chatService';
 import { conversationService } from '../services/conversationService';
@@ -43,23 +43,6 @@ const SAMPLE_PRODUCTS: Product[] = [
   },
 ];
 
-const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: 'msg-1',
-    role: 'user',
-    content: 'Find me a black hoodie under ₹2,000',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'msg-2',
-    role: 'assistant',
-    content: 'I found a few options that match your budget in the catalog.',
-    product: SAMPLE_PRODUCTS[0],
-    products: SAMPLE_PRODUCTS,
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export function useChat() {
   const queryClient = useQueryClient();
   const {
@@ -70,7 +53,7 @@ export function useChat() {
     setThinking,
   } = useChatStore();
 
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [agentActions, setAgentActions] = useState<AgentAction[]>([]);
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>([
     'Find running shoes under ₹3,500',
@@ -186,12 +169,22 @@ export function useChat() {
     },
   });
 
+  const isThinkingRef = useRef(isThinking);
+  isThinkingRef.current = isThinking;
+
+  const mutateRef = useRef(sendMutation.mutate);
+  mutateRef.current = sendMutation.mutate;
+
+  const isPendingRef = useRef(sendMutation.isPending);
+  isPendingRef.current = sendMutation.isPending;
+
   const sendMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || isThinking) return;
-      sendMutation.mutate(text);
+      const trimmed = text.trim();
+      if (!trimmed || isThinkingRef.current || isPendingRef.current) return;
+      mutateRef.current(trimmed);
     },
-    [isThinking, sendMutation],
+    [],
   );
 
   return {

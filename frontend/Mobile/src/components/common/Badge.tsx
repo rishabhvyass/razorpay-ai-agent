@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { radius, typography, useThemeColors } from '../../theme';
 import { OrderStatus } from '../../types';
 
 export interface BadgeProps {
@@ -22,6 +22,7 @@ export function Badge({
   style,
   textStyle,
 }: BadgeProps) {
+  const themeColors = useThemeColors();
   let resolvedVariant = variant || 'default';
   let hasDot = showDot;
 
@@ -51,87 +52,103 @@ export function Badge({
     switch (resolvedVariant) {
       case 'success':
         return {
-          bg: colors.successBg,
-          text: colors.successText,
-          border: colors.successBorder,
-          dot: colors.successDot,
+          bg: themeColors.successBg,
+          text: themeColors.successText,
+          border: themeColors.successBorder,
+          dot: themeColors.successDot,
         };
       case 'warning':
         return {
-          bg: colors.warningBg,
-          text: colors.warningText,
-          border: colors.warningBorder,
-          dot: colors.warningDot,
+          bg: themeColors.warningBg,
+          text: themeColors.warningText,
+          border: themeColors.warningBorder,
+          dot: themeColors.warningDot,
         };
       case 'danger':
         return {
-          bg: colors.dangerBg,
-          text: colors.dangerText,
-          border: colors.dangerBorder,
-          dot: colors.dangerDot,
+          bg: themeColors.dangerBg,
+          text: themeColors.dangerText,
+          border: themeColors.dangerBorder,
+          dot: themeColors.dangerDot,
         };
       case 'info':
         return {
-          bg: colors.infoBg,
-          text: colors.infoText,
-          border: colors.infoBorder,
-          dot: colors.info,
+          bg: themeColors.infoBg,
+          text: themeColors.infoText,
+          border: themeColors.infoBorder,
+          dot: themeColors.info,
+        };
+      case 'neutral':
+        return {
+          bg: themeColors.neutralBg,
+          text: themeColors.neutralText,
+          border: themeColors.neutralBorder,
+          dot: themeColors.neutralDot,
         };
       case 'aiPick':
         return {
-          bg: 'rgba(255, 255, 255, 0.92)',
-          text: colors.textPrimary,
-          border: 'rgba(228, 228, 231, 0.6)',
-          dot: colors.accentPurple,
-        };
-      case 'outline':
-        return {
-          bg: colors.surface,
-          text: colors.textSecondary,
-          border: colors.border,
-          dot: colors.textMuted,
+          bg: themeColors.primarySubtle,
+          text: themeColors.primary,
+          border: themeColors.primarySubtle,
+          dot: themeColors.primary,
         };
       case 'testMode':
         return {
-          bg: colors.warningBg,
-          text: colors.warningText,
-          border: colors.warningBorder,
-          dot: colors.warningDot,
+          bg: themeColors.testModeBg,
+          text: themeColors.testModeText,
+          border: themeColors.testModeBorder,
+          dot: themeColors.primary,
         };
-      case 'neutral':
+      case 'outline':
+        return {
+          bg: themeColors.surface,
+          text: themeColors.textSecondary,
+          border: themeColors.border,
+          dot: themeColors.textMuted,
+        };
+      case 'default':
       default:
         return {
-          bg: colors.neutralBg,
-          text: colors.neutralText,
-          border: colors.neutralBorder,
-          dot: colors.neutralDot,
+          bg: themeColors.surfaceSubtle,
+          text: themeColors.textPrimary,
+          border: themeColors.border,
+          dot: themeColors.primary,
         };
     }
   };
 
-  const v = getVariantStyles();
+  const vStyles = getVariantStyles();
   const isSm = size === 'sm';
 
   return (
     <View
       style={[
-        styles.badge,
+        styles.container,
+        isSm ? styles.containerSm : styles.containerMd,
         {
-          backgroundColor: v.bg,
-          borderColor: v.border,
-          paddingHorizontal: isSm ? 8 : 12,
-          paddingVertical: isSm ? 3 : 5,
+          backgroundColor: vStyles.bg,
+          borderColor: vStyles.border,
         },
         style,
       ]}
     >
-      {hasDot && <View style={[styles.dot, { backgroundColor: v.dot }]} />}
+      {hasDot && (
+        <View
+          style={[
+            styles.dot,
+            isSm ? styles.dotSm : styles.dotMd,
+            { backgroundColor: vStyles.dot },
+          ]}
+        />
+      )}
       <Text
         style={[
           styles.text,
-          { color: v.text, fontSize: isSm ? 11 : 12 },
+          isSm ? styles.textSm : styles.textMd,
+          { color: vStyles.text },
           textStyle,
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -140,21 +157,45 @@ export function Badge({
 }
 
 const styles = StyleSheet.create({
-  badge: {
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.full,
     borderWidth: 1,
     alignSelf: 'flex-start',
   },
+  containerSm: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  containerMd: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
   dot: {
+    borderRadius: radius.full,
+  },
+  dotSm: {
+    width: 5,
+    height: 5,
+    marginRight: 4,
+  },
+  dotMd: {
     width: 6,
     height: 6,
-    borderRadius: 3,
     marginRight: 6,
   },
   text: {
+    fontWeight: '600',
+  },
+  textSm: {
     ...typography.captionBold,
-    letterSpacing: 0.1,
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
+  textMd: {
+    ...typography.captionBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
 });

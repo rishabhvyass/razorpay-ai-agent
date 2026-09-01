@@ -1,18 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Badge } from '../common/Badge';
-import { ScalePressable } from '../motion/ScalePressable';
-import { colors, radius, spacing, typography } from '../../theme';
+import { AnimatedPressable } from '../motion/AnimatedPressable';
+import { FadeInImage } from '../motion/FadeInImage';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { motion } from '../../theme/motion';
 import { Product } from '../../types';
 import { useReduceMotion } from '../../hooks/motion/useReduceMotion';
@@ -24,38 +20,34 @@ interface ProductCarouselProps {
   onView?: (product: Product) => void;
 }
 
-interface AnimatedProductCardProps {
+interface ProductCardProps {
   product: Product;
   index: number;
   onBuy?: (product: Product) => void;
   onView?: (product: Product) => void;
 }
 
-function AnimatedProductCard({ product, index, onBuy, onView }: AnimatedProductCardProps) {
+function AnimatedProductCard({ product, index, onBuy, onView }: ProductCardProps) {
   const reduceMotion = useReduceMotion();
+  const themeColors = useThemeColors();
   const formattedPrice = formatMinorUnits(product.price, product.currency);
   const imageUrl =
     product.imageUrl ||
     'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800';
 
-  // Card entrance animation
   const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const translateY = useRef(new Animated.Value(reduceMotion ? 0 : 20)).current;
   const scale = useRef(new Animated.Value(reduceMotion ? 1 : 0.97)).current;
 
-  // Soft image reveal animation
-  const imageOpacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-  const imageScale = useRef(new Animated.Value(reduceMotion ? 1 : 1.03)).current;
-
   useEffect(() => {
     if (reduceMotion) return;
-
-    const delay = Math.min(index * motion.stagger.card, 200);
+    const delays = [0, 70, 140];
+    const delay = delays[index] !== undefined ? delays[index] : index * 70;
 
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: motion.duration.medium,
+        duration: motion.duration.standard,
         delay,
         easing: motion.easing.easeOut,
         useNativeDriver: true,
@@ -67,29 +59,13 @@ function AnimatedProductCard({ product, index, onBuy, onView }: AnimatedProductC
       }),
       Animated.spring(scale, {
         toValue: 1,
-        ...motion.spring.snappy,
+        ...motion.spring.gentle,
         delay,
       }),
     ]).start();
   }, [index, opacity, reduceMotion, scale, translateY]);
 
-  const handleImageLoad = () => {
-    if (reduceMotion) return;
-    Animated.parallel([
-      Animated.timing(imageOpacity, {
-        toValue: 1,
-        duration: motion.duration.normal,
-        easing: motion.easing.easeOut,
-        useNativeDriver: true,
-      }),
-      Animated.timing(imageScale, {
-        toValue: 1,
-        duration: motion.duration.normal,
-        easing: motion.easing.easeOut,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  const inStock = product.inStock !== false && (product.stock === undefined || product.stock > 0);
 
   return (
     <Animated.View
@@ -101,235 +77,227 @@ function AnimatedProductCard({ product, index, onBuy, onView }: AnimatedProductC
         },
       ]}
     >
-      <ScalePressable
-        pressedScale={motion.scale.cardPress}
+      <AnimatedPressable
+        style={[
+          styles.card,
+          {
+            backgroundColor: themeColors.surface,
+            borderColor: themeColors.border,
+          },
+        ]}
+        pressScale={0.985}
         onPress={() => onView?.(product)}
-        style={styles.card}
+        accessibilityLabel={`View ${product.name}`}
       >
-        <View style={styles.imageContainer}>
-          <Animated.Image
+        {/* Dominating Product Image with Smooth Load Fade */}
+        <View style={[styles.imageContainer, { backgroundColor: themeColors.surfaceSubtle }]}>
+          <FadeInImage
             source={{ uri: imageUrl }}
-            style={[
-              styles.image,
-              {
-                opacity: imageOpacity,
-                transform: [{ scale: imageScale }],
-              },
-            ]}
+            style={styles.image}
             resizeMode="cover"
-            onLoad={handleImageLoad}
           />
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText}>
+              {product.category || 'Curated'}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.content}>
-          <Text style={styles.title} numberOfLines={1}>
+        {/* Product Details Hierarchy */}
+        <View style={styles.detailsContainer}>
+          <Text style={[styles.productName, { color: themeColors.textPrimary }]} numberOfLines={1}>
             {product.name}
           </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {product.category || 'Premium cotton'} · In Stock
-          </Text>
 
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{formattedPrice}</Text>
-            <Badge label="In stock" variant="success" size="sm" showDot={true} />
+          {/* Price & Stock */}
+          <View style={styles.priceStockRow}>
+            <Text style={[styles.priceText, { color: themeColors.textPrimary }]}>{formattedPrice}</Text>
+            <View style={styles.stockBadge}>
+              <View
+                style={[
+                  styles.stockDot,
+                  { backgroundColor: inStock ? colors.success : colors.textMuted },
+                ]}
+              />
+              <Text style={[styles.stockText, { color: themeColors.textSecondary }]}>{inStock ? 'In stock' : 'Unavailable'}</Text>
+            </View>
           </View>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.viewButton}
+          {/* Actions: [View] [Buy] */}
+          <View style={styles.actionRow}>
+            <AnimatedPressable
+              style={[
+                styles.viewButton,
+                {
+                  backgroundColor: themeColors.surface,
+                  borderColor: themeColors.border,
+                },
+              ]}
+              pressScale={0.96}
               onPress={() => onView?.(product)}
-              activeOpacity={0.7}
+              accessibilityLabel="View details"
             >
-              <Text style={styles.viewButtonText}>View</Text>
-            </TouchableOpacity>
+              <Text style={[styles.viewButtonText, { color: themeColors.textPrimary }]}>View</Text>
+            </AnimatedPressable>
 
-            <TouchableOpacity
-              style={styles.buyButton}
+            <AnimatedPressable
+              style={[
+                styles.buyButton,
+                { backgroundColor: themeColors.primary },
+                !inStock && styles.buyButtonDisabled,
+              ]}
+              pressScale={0.96}
+              disabled={!inStock}
               onPress={() => onBuy?.(product)}
-              activeOpacity={0.85}
+              accessibilityLabel="Buy now"
             >
               <Text style={styles.buyButtonText}>Buy</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         </View>
-      </ScalePressable>
+      </AnimatedPressable>
     </Animated.View>
   );
 }
 
 export function ProductCarousel({ products, onBuy, onView }: ProductCarouselProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  if (!products || products.length === 0) return null;
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const slide = Math.round(event.nativeEvent.contentOffset.x / 250);
-    if (slide !== activeIndex && slide >= 0 && slide < products.length) {
-      setActiveIndex(slide);
-    }
-  };
+  if (!products || products.length === 0) {
+    return null;
+  }
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={266} // card width + gap
-        decelerationRate="fast"
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {products.map((product, index) => (
-          <AnimatedProductCard
-            key={product.id}
-            product={product}
-            index={index}
-            onBuy={onBuy}
-            onView={onView}
-          />
-        ))}
-      </ScrollView>
-
-      {/* Pagination Dots */}
-      {products.length > 1 && (
-        <View style={styles.paginationRow}>
-          {products.map((_, idx) => (
-            <View
-              key={`dot-${idx}`}
-              style={[
-                styles.dot,
-                idx === activeIndex ? styles.dotActive : styles.dotInactive,
-              ]}
-            />
-          ))}
-        </View>
-      )}
-    </View>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContainer}
+      decelerationRate="fast"
+      snapToInterval={226}
+      snapToAlignment="start"
+    >
+      {products.map((product, index) => (
+        <AnimatedProductCard
+          key={product.id || index}
+          product={product}
+          index={index}
+          onBuy={onBuy}
+          onView={onView}
+        />
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginVertical: spacing.sm,
-  },
-  scrollContent: {
+  scrollContainer: {
+    paddingVertical: spacing.xs,
     paddingRight: spacing.lg,
-    paddingVertical: 4,
-    gap: 12,
+    gap: spacing.md,
   },
   cardWrapper: {
-    width: 254,
+    width: 214,
   },
   card: {
-    width: 254,
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: radius.cards,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.subtle,
   },
   imageContainer: {
     width: '100%',
-    height: 155,
+    height: 150,
     backgroundColor: colors.surfaceSubtle,
-    overflow: 'hidden',
+    position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
   },
-  content: {
+  categoryBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.small,
+  },
+  categoryBadgeText: {
+    ...typography.captionBold,
+    color: colors.textPrimary,
+    fontSize: 10,
+    textTransform: 'uppercase',
+  },
+  detailsContainer: {
     padding: spacing.md,
   },
-  title: {
-    ...typography.bodyBold,
-    fontSize: 15,
+  productName: {
+    ...typography.h4,
     color: colors.textPrimary,
+    fontSize: 14,
     fontWeight: '700',
-    marginBottom: 2,
-  },
-  subtitle: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.textMuted,
     marginBottom: spacing.xs,
   },
-  priceRow: {
+  priceStockRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
-    marginTop: 2,
   },
-  price: {
-    ...typography.h3,
-    fontSize: 18,
+  priceText: {
+    ...typography.priceSmall,
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontSize: 16,
   },
-  buttonRow: {
+  stockBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+  },
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  stockText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   viewButton: {
     flex: 1,
-    height: 38,
-    borderRadius: 10,
+    height: 34,
+    borderRadius: radius.small,
     backgroundColor: colors.surfaceSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewButtonText: {
-    ...typography.captionBold,
-    fontSize: 13,
+    ...typography.buttonSm,
     color: colors.textPrimary,
     fontWeight: '600',
   },
   buyButton: {
     flex: 1,
-    height: 38,
-    borderRadius: 10,
+    height: 34,
+    borderRadius: radius.small,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+  },
+  buyButtonDisabled: {
+    opacity: 0.4,
   },
   buyButtonText: {
-    ...typography.captionBold,
-    fontSize: 13,
+    ...typography.buttonSm,
     color: colors.textInverse,
-    fontWeight: '700',
-  },
-  paginationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.sm,
-    gap: 6,
-  },
-  dot: {
-    height: 5,
-    borderRadius: 2.5,
-  },
-  dotActive: {
-    width: 16,
-    backgroundColor: colors.primary,
-  },
-  dotInactive: {
-    width: 5,
-    backgroundColor: colors.border,
+    fontWeight: '600',
   },
 });

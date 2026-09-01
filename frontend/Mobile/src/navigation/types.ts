@@ -5,10 +5,10 @@ import { Order, Product } from '../types';
 
 export type MainTabParamList = {
   ProductsTab: undefined;
-  AITab: undefined;
+  AITab: { initialQuery?: string } | undefined;
   OrdersTab: undefined;
   // Aliases for compatibility
-  ChatTab?: undefined;
+  ChatTab?: { initialQuery?: string } | undefined;
   ExploreTab?: undefined;
 };
 

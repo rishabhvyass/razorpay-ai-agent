@@ -1,18 +1,23 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Design tokens.
+   Checkout Concierge — Public Website Design System Tokens
+   White & Blue Fintech Visual Palette & Strict Design Hierarchy
 
-   Every colour the app uses is declared here and nowhere else. Components refer
-   to semantic names (`bg-surface`, `text-muted`) rather than raw hex or Tailwind
-   palette numbers, which is what makes a dark theme a change to this block
-   instead of a change to sixty components.
-
-   The accent is a restrained indigo/violet reserved for AI surfaces and primary
-   actions. Status colours are never the only signal for a state - every status
-   badge pairs its colour with a label and an icon (see ui/Badge.tsx), because a
-   payment state that reads only as "green" is unreadable to a colour-blind
-   reviewer.
+   Primary Blue:        #0C66E4
+   Deep Cobalt:         #0047B3
+   Electric Blue:       #2563EB
+   Sky / Soft Blue:     #EBF3FF
+   Light Ice Blue:      #F0F6FE
+   Canvas Slate:        #F8FAFC
+   Surface Pure White:  #FFFFFF
+   Primary Text:        #0F172A
+   Secondary Text:      #475569
+   Muted Text:          #94A3B8
+   Border:              #E2E8F0
+   Success:             #16A34A
+   Warning:             #D97706
+   Error:               #DC2626
    --------------------------------------------------------------------------- */
 @theme {
   /* Surfaces */
@@ -20,27 +25,24 @@
   --color-surface: var(--color-surface);
   --color-surface-subtle: var(--color-surface-subtle);
   --color-surface-sunken: var(--color-surface-sunken);
+  --color-ice-blue: var(--color-ice-blue);
 
-  /* Text */
+  /* Typography Colors */
   --color-ink: var(--color-ink);
   --color-muted: var(--color-muted);
   --color-faint: var(--color-faint);
 
-  /* Lines */
+  /* Lines & Borders */
   --color-line: var(--color-line);
   --color-line-strong: var(--color-line-strong);
 
-  /* Accent - AI + primary actions */
-  --color-accent-50: var(--color-accent-50);
-  --color-accent-100: var(--color-accent-100);
-  --color-accent-200: var(--color-accent-200);
-  --color-accent-300: var(--color-accent-300);
-  --color-accent-500: var(--color-accent-500);
-  --color-accent: var(--color-accent);
-  --color-accent-700: var(--color-accent-700);
-  --color-accent-900: var(--color-accent-900);
+  /* Blue Brand Accents */
+  --color-brand-blue: var(--color-brand-blue);
+  --color-brand-blue-deep: var(--color-brand-blue-deep);
+  --color-brand-blue-light: var(--color-brand-blue-light);
+  --color-brand-blue-subtle: var(--color-brand-blue-subtle);
 
-  /* Status */
+  /* Status Colors */
   --color-success: var(--color-success);
   --color-success-bg: var(--color-success-bg);
   --color-success-line: var(--color-success-line);
@@ -53,221 +55,122 @@
   --color-danger-bg: var(--color-danger-bg);
   --color-danger-line: var(--color-danger-line);
 
-  --color-info: var(--color-info);
-  --color-info-bg: var(--color-info-bg);
-  --color-info-line: var(--color-info-line);
+  /* Standard Accent Mappings */
+  --color-accent: var(--color-brand-blue);
+  --color-accent-700: var(--color-brand-blue-deep);
+  --color-accent-50: var(--color-ice-blue);
 
-  /* Razorpay brand */
-  --color-razorpay: #0068d6;
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
 
-  /* Type */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
-
-  /* Radii */
+  /* Corner Radii */
   --radius-card: 1rem;
   --radius-control: 0.625rem;
 
-  /* Soft modern shadows */
-  --shadow-subtle: var(--shadow-subtle);
-  --shadow-card: var(--shadow-card);
-  --shadow-lifted: var(--shadow-lifted);
-
-  /* Micro-interactions */
-  --animate-fade-up: fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-fade-in: fade-in 0.2s ease-out both;
-  --animate-slide-in-right: slide-in-right 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
-  --animate-thinking: thinking 1.4s ease-in-out infinite;
-  --animate-check-pop: check-pop 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Shadows */
+  --shadow-subtle: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 6px 16px -2px rgb(15 23 42 / 0.04);
+  --shadow-lifted: 0 10px 28px -4px rgb(15 23 42 / 0.08), 0 2px 6px -1px rgb(15 23 42 / 0.03);
+  --shadow-blue-cta: 0 4px 14px -1px rgba(12, 102, 228, 0.35);
 }
 
 :root {
-  /* Light Theme (Default) */
-  --color-canvas: #f8fafc;
-  --color-surface: #ffffff;
-  --color-surface-subtle: #f1f5f9;
-  --color-surface-sunken: #e2e8f0;
+  /* Light Theme (White & Blue Palette) */
+  --color-canvas: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #F1F5F9;
+  --color-surface-sunken: #E2E8F0;
+  --color-ice-blue: #EBF3FF;
 
-  --color-ink: #0f172a;
+  --color-ink: #0F172A;
   --color-muted: #475569;
-  --color-faint: #64748b;
+  --color-faint: #94A3B8;
 
-  --color-line: #e2e8f0;
-  --color-line-strong: #cbd5e1;
+  --color-line: #E2E8F0;
+  --color-line-strong: #CBD5E1;
 
-  --color-accent-50: #eef2ff;
-  --color-accent-100: #e0e7ff;
-  --color-accent-200: #c7d2fe;
-  --color-accent-300: #a5b4fc;
-  --color-accent-500: #6366f1;
-  --color-accent: #4f46e5;
-  --color-accent-700: #4338ca;
-  --color-accent-900: #312e81;
+  --color-brand-blue: #0C66E4;
+  --color-brand-blue-deep: #0047B3;
+  --color-brand-blue-light: #388BFF;
+  --color-brand-blue-subtle: #EBF3FF;
 
-  --color-success: #15803d;
-  --color-success-bg: #f0fdf4;
-  --color-success-line: #bbf7d0;
+  --color-success: #16A34A;
+  --color-success-bg: #F0FDF4;
+  --color-success-line: #BBF7D0;
 
-  --color-warning: #b45309;
-  --color-warning-bg: #fffbeb;
-  --color-warning-line: #fde68a;
+  --color-warning: #D97706;
+  --color-warning-bg: #FFFBEB;
+  --color-warning-line: #FDE68A;
 
-  --color-danger: #b91c1c;
-  --color-danger-bg: #fef2f2;
-  --color-danger-line: #fecaca;
-
-  --color-info: #0369a1;
-  --color-info-bg: #f0f9ff;
-  --color-info-line: #bae6fd;
-
-  --shadow-subtle: 0 1px 2px 0 rgb(15 23 42 / 0.05);
-  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 4px 14px -2px rgb(15 23 42 / 0.08);
-  --shadow-lifted: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 12px 32px -4px rgb(15 23 42 / 0.12);
+  --color-danger: #DC2626;
+  --color-danger-bg: #FEF2F2;
+  --color-danger-line: #FECACA;
 }
 
 .dark, [data-theme="dark"] {
   /* Dark Theme */
-  --color-canvas: #090d16;
-  --color-surface: #111827;
-  --color-surface-subtle: #172033;
-  --color-surface-sunken: #0c1220;
+  --color-canvas: #090D16;
+  --color-surface: #0F172A;
+  --color-surface-subtle: #1E293B;
+  --color-surface-sunken: #0A0F1D;
+  --color-ice-blue: #0C2147;
 
-  --color-ink: #f8fafc;
-  --color-muted: #94a3b8;
-  --color-faint: #64748b;
+  --color-ink: #F8FAFC;
+  --color-muted: #94A3B8;
+  --color-faint: #64748B;
 
-  --color-line: #1e293b;
+  --color-line: #1E293B;
   --color-line-strong: #334155;
 
-  --color-accent-50: #1e1b4b;
-  --color-accent-100: #312e81;
-  --color-accent-200: #3730a3;
-  --color-accent-300: #4338ca;
-  --color-accent-500: #6366f1;
-  --color-accent: #6366f1;
-  --color-accent-700: #818cf8;
-  --color-accent-900: #e0e7ff;
+  --color-brand-blue: #388BFF;
+  --color-brand-blue-deep: #0C66E4;
+  --color-brand-blue-light: #66A3FF;
+  --color-brand-blue-subtle: #0C2147;
 
-  --color-success: #4ade80;
-  --color-success-bg: #052e16;
-  --color-success-line: #14532d;
+  --color-success: #4ADE80;
+  --color-success-bg: #052E16;
+  --color-success-line: #14532D;
 
-  --color-warning: #fbbf24;
-  --color-warning-bg: #451a03;
-  --color-warning-line: #78350f;
+  --color-warning: #FBBF24;
+  --color-warning-bg: #451A03;
+  --color-warning-line: #78350F;
 
-  --color-danger: #f87171;
-  --color-danger-bg: #450a0a;
-  --color-danger-line: #7f1d1d;
-
-  --color-info: #38bdf8;
-  --color-info-bg: #082f49;
-  --color-info-line: #075985;
-
-  --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 4px 16px -2px rgb(0 0 0 / 0.6);
-  --shadow-lifted: 0 6px 12px -2px rgb(0 0 0 / 0.6), 0 16px 40px -6px rgb(0 0 0 / 0.8);
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes pulse-soft {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-/* The three-dot "agent is thinking" rhythm. */
-@keyframes thinking {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.35;
-  }
-  30% {
-    transform: translateY(-3px);
-    opacity: 1;
-  }
-}
-
-@keyframes check-pop {
-  0% {
-    transform: scale(0.7);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.06);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  --color-danger: #F87171;
+  --color-danger-bg: #450A0A;
+  --color-danger-line: #7F1D1D;
 }
 
 /* ---------------------------------------------------------------------------
-   Base
+   Base Rules
    --------------------------------------------------------------------------- */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-canvas text-ink font-sans antialiased;
-    font-feature-settings: 'cv11', 'ss01';
-    font-variation-settings: 'opsz' 32;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
   }
 
-  /* A visible, consistent focus ring on every interactive element. Removing
-     outlines without replacing them is the single most common accessibility
-     regression in a design-led UI, so the replacement is defined once, here. */
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
-    @apply outline-accent outline-2 outline-offset-2;
+    outline: 2px solid var(--color-brand-blue);
+    outline-offset: 2px;
   }
 
   ::selection {
-    @apply bg-accent-100 text-accent-900;
+    background-color: var(--color-ice-blue);
+    color: var(--color-brand-blue-deep);
   }
 }
 
 @layer utilities {
-  /* Tabular figures for money and IDs, so digits do not shift width between
-     renders while a status is polling. */
   .nums {
     font-variant-numeric: tabular-nums;
   }
@@ -277,8 +180,8 @@
     scrollbar-color: var(--color-line-strong) transparent;
   }
   .scrollbar-slim::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   .scrollbar-slim::-webkit-scrollbar-thumb {
     background-color: var(--color-line-strong);
@@ -286,16 +189,5 @@
   }
   .scrollbar-slim::-webkit-scrollbar-track {
     background: transparent;
-  }
-}
-
-/* Respect a reduced-motion preference: keep state changes, drop the movement. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
 }

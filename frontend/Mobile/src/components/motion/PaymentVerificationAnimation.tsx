@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { Lock } from 'lucide-react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { radius, spacing, typography, useThemeColors } from '../../theme';
 import { motion } from '../../theme/motion';
 import { useReduceMotion } from '../../hooks/motion/useReduceMotion';
 
@@ -15,6 +15,7 @@ export function PaymentVerificationAnimation({
   testMode = true,
 }: PaymentVerificationAnimationProps) {
   const reduceMotion = useReduceMotion();
+  const themeColors = useThemeColors();
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -67,12 +68,14 @@ export function PaymentVerificationAnimation({
     <View style={styles.container}>
       {/* Central Progress Ring */}
       <View style={styles.spinnerContainer}>
-        <View style={styles.spinnerTrack} />
+        <View style={[styles.spinnerTrack, { borderColor: themeColors.borderSubtle }]} />
         {!reduceMotion && (
           <Animated.View
             style={[
               styles.spinnerArc,
               {
+                borderTopColor: themeColors.primary,
+                borderRightColor: themeColors.primary,
                 transform: [{ rotate: spin }],
               },
             ]}
@@ -82,27 +85,28 @@ export function PaymentVerificationAnimation({
           style={[
             styles.centerLockIcon,
             {
+              backgroundColor: themeColors.surface,
               transform: [{ scale: pulseAnim }],
             },
           ]}
         >
-          <Lock size={22} color={colors.primary} strokeWidth={2.4} />
+          <Lock size={22} color={themeColors.primary} strokeWidth={2.4} />
         </Animated.View>
       </View>
 
       {/* Amount */}
-      <Text style={styles.amountText}>{amountFormatted}</Text>
+      <Text style={[styles.amountText, { color: themeColors.textPrimary }]}>{amountFormatted}</Text>
 
       {/* Status Title & Subtitle */}
-      <Text style={styles.titleText}>Verifying payment</Text>
-      <Text style={styles.subtitleText}>
+      <Text style={[styles.titleText, { color: themeColors.textPrimary }]}>Verifying payment</Text>
+      <Text style={[styles.subtitleText, { color: themeColors.textSecondary }]}>
         We're waiting for confirmation from Razorpay.
       </Text>
 
-      {/* Test Mode Badge */}
+      {/* Test Mode pill */}
       {testMode && (
-        <View style={styles.testModeBadge}>
-          <Text style={styles.testModeText}>TEST MODE</Text>
+        <View style={[styles.testBadge, { backgroundColor: themeColors.testModeBg, borderColor: themeColors.testModeBorder }]}>
+          <Text style={[styles.testBadgeText, { color: themeColors.testModeText }]}>TEST MODE</Text>
         </View>
       )}
     </View>
@@ -112,73 +116,65 @@ export function PaymentVerificationAnimation({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
   },
   spinnerContainer: {
-    width: 90,
-    height: 90,
+    width: 88,
+    height: 88,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
     marginBottom: spacing.lg,
+    position: 'relative',
   },
   spinnerTrack: {
-    position: 'absolute',
     width: 88,
     height: 88,
     borderRadius: 44,
     borderWidth: 3,
-    borderColor: colors.primarySubtle,
+    position: 'absolute',
   },
   spinnerArc: {
-    position: 'absolute',
     width: 88,
     height: 88,
     borderRadius: 44,
     borderWidth: 3,
     borderColor: 'transparent',
-    borderTopColor: colors.primary,
-    borderLeftColor: colors.primary,
+    position: 'absolute',
   },
   centerLockIcon: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
   amountText: {
-    ...typography.h1,
+    ...typography.hero,
     fontSize: 32,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   titleText: {
-    ...typography.bodyBold,
-    fontSize: 17,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginBottom: 4,
+    ...typography.h2,
+    fontSize: 18,
+    marginBottom: spacing.xs,
   },
   subtitleText: {
     ...typography.body,
     fontSize: 14,
-    color: colors.textMuted,
     textAlign: 'center',
     maxWidth: 260,
-    lineHeight: 20,
     marginBottom: spacing.md,
   },
-  testModeBadge: {
-    backgroundColor: colors.testModeBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+  testBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    borderWidth: 1,
   },
-  testModeText: {
+  testBadgeText: {
     ...typography.captionBold,
     fontSize: 10,
-    color: colors.testModeText,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
 });

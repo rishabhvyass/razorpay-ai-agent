@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import {
-  Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,16 +9,13 @@ import {
   View,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft } from 'lucide-react-native';
+import { Check, X } from 'lucide-react-native';
 import { Button } from '../../components/common/Button';
-import { Card } from '../../components/common/Card';
-import { PaymentFailureAnimation } from '../../components/motion/PaymentFailureAnimation';
 import { SlideUpView } from '../../components/motion/SlideUpView';
 import { useOrder } from '../../hooks/useOrder';
 import { RootNavigationProp, RootStackParamList } from '../../navigation/types';
 import { useOrderStore } from '../../store/orderStore';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { formatMinorUnits } from '../../utils/currency';
 
 type PaymentFailedRouteProp = RouteProp<RootStackParamList, 'PaymentFailed'>;
@@ -30,7 +27,6 @@ export function PaymentFailedScreen() {
 
   const { order } = useOrder(orderId);
 
-  // Mark order dynamically as PAYMENT_FAILED in order store
   useEffect(() => {
     if (orderId) {
       useOrderStore.getState().updateOrderStatus(orderId, 'PAYMENT_FAILED');
@@ -51,100 +47,90 @@ export function PaymentFailedScreen() {
     }
   }, [orderId, product, order?.quantity, order?.createdAt]);
 
-  const quantity = order?.quantity ?? 1;
-  const formattedAmount = order
-    ? order.amountFormatted || formatMinorUnits(order.amount, order.currency)
-    : product
-    ? formatMinorUnits(product.price * quantity, product.currency)
-    : '₹1,499';
-
-  const orderReference = order?.id || 'order_NxK7Pq2d';
-  const imageUrl = product?.imageUrl || 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800';
-
   const handleTryAgain = () => {
-    navigation.replace('Payment', { orderId, product });
+    if (product) {
+      navigation.replace('Payment', { orderId, product });
+    } else {
+      navigation.navigate('MainTabs', { screen: 'AITab' });
+    }
   };
 
-  const handleCancelOrder = () => {
-    navigation.navigate('Main', { screen: 'AITab' });
+  const handleCancel = () => {
+    navigation.navigate('MainTabs', { screen: 'AITab' });
   };
+
+  const themeColors = useThemeColors();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Payment</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Failure Animation Hero */}
-        <PaymentFailureAnimation
-          title="Payment wasn't completed"
-          subtitle="No successful payment was verified by Razorpay."
-        />
-
-        {/* Order Details Card */}
-        <SlideUpView distance={14} delay={140} duration={motion.duration.normal}>
-          <Card variant="outlined" style={styles.detailsCard}>
-            <View style={styles.itemRow}>
-              <Image source={{ uri: imageUrl }} style={styles.itemImage} resizeMode="cover" />
-              <View style={styles.itemDetails}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {product?.name || 'Classic Oversized Hoodie'}
-                </Text>
-                <Text style={styles.itemCategory}>
-                  {product?.category || 'Clothing'} · Qty: {quantity}
-                </Text>
-                <Text style={styles.itemPrice}>{formattedAmount}</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Order ID</Text>
-              <Text style={styles.infoValue}>{orderReference.slice(0, 18)}...</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Status</Text>
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>PAYMENT FAILED</Text>
-              </View>
-            </View>
-          </Card>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Calm Non-Punishing Failure Hero */}
+        <SlideUpView distance={14} duration={300} style={styles.heroSection}>
+          <View style={[styles.iconCircle, { backgroundColor: themeColors.dangerBg }]}>
+            <X size={26} color={themeColors.danger} strokeWidth={2.5} />
+          </View>
+          <Text style={[styles.title, { color: themeColors.textPrimary }]}>Payment wasn't completed</Text>
+          <Text style={[styles.message, { color: themeColors.textSecondary }]}>
+            No successful payment was verified by Razorpay.
+          </Text>
         </SlideUpView>
 
-        {/* Action Buttons */}
-        <SlideUpView distance={18} delay={180} duration={motion.duration.normal}>
-          <View style={styles.buttonGroup}>
-            <Button
-              title="Try Again"
-              variant="primary"
-              size="lg"
-              onPress={handleTryAgain}
-              style={styles.primaryButton}
-            />
+        {/* 3-Step Verification Timeline */}
+        <SlideUpView distance={16} delay={80} duration={240} style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <View style={styles.stepItem}>
+            <View style={styles.checkDot}>
+              <Check size={11} color={colors.success} strokeWidth={3} />
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitle, { color: themeColors.textPrimary }]}>Order created</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textSecondary }]}>Server validated pricing & draft ID</Text>
+            </View>
+          </View>
 
-            <Button
-              title="Cancel Order"
-              variant="secondary"
-              size="lg"
-              onPress={handleCancelOrder}
-              style={styles.secondaryButton}
-            />
+          <View style={[styles.line, { backgroundColor: themeColors.borderSubtle }]} />
+
+          <View style={styles.stepItem}>
+            <View style={styles.checkDot}>
+              <Check size={11} color={colors.success} strokeWidth={3} />
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitle, { color: themeColors.textPrimary }]}>Payment initiated</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textSecondary }]}>Razorpay checkout session generated</Text>
+            </View>
+          </View>
+
+          <View style={[styles.line, { backgroundColor: themeColors.borderSubtle }]} />
+
+          <View style={styles.stepItem}>
+            <View style={[styles.failDot, { backgroundColor: themeColors.dangerBg }]}>
+              <X size={11} color={themeColors.danger} strokeWidth={2.5} />
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitleFail, { color: themeColors.danger }]}>Payment not verified</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textSecondary }]}>No signature received or checkout was cancelled</Text>
+            </View>
           </View>
         </SlideUpView>
       </ScrollView>
+
+      {/* Action Footer: [Try again] [Cancel order] */}
+      <View style={[styles.footer, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+        <Button
+          title="Try again"
+          variant="primary"
+          size="lg"
+          onPress={handleTryAgain}
+        />
+        <Button
+          title="Cancel order"
+          variant="outline"
+          size="lg"
+          onPress={handleCancel}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -154,113 +140,116 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  headerSpacer: {
-    width: 32,
-  },
-  headerTitle: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-    fontSize: 16,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scrollContent: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
-  },
-  detailsCard: {
-    marginBottom: spacing.xl,
-    padding: spacing.lg,
-  },
-  itemRow: {
-    flexDirection: 'row',
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.xxxl,
+    paddingBottom: 140,
     alignItems: 'center',
   },
-  itemImage: {
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
+  },
+  iconCircle: {
     width: 60,
     height: 60,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 30,
+    backgroundColor: colors.dangerBg,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  itemDetails: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  itemName: {
-    ...typography.bodyBold,
+  title: {
+    ...typography.h1,
     color: colors.textPrimary,
-    fontSize: 14,
+    fontSize: 22,
+    marginBottom: 6,
   },
-  itemCategory: {
-    ...typography.caption,
-    color: colors.textMuted,
+  message: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 22,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPaddingLarge,
+    ...shadows.subtle,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  checkDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.successBg,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 2,
   },
-  itemPrice: {
-    ...typography.bodyBold,
-    color: colors.primary,
-    marginTop: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginVertical: spacing.md,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  failDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.dangerBg,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
     alignItems: 'center',
-    marginBottom: spacing.xs + 2,
+    justifyContent: 'center',
+    marginTop: 2,
   },
-  infoLabel: {
+  line: {
+    width: 2,
+    height: 20,
+    backgroundColor: colors.border,
+    marginLeft: 10,
+    marginVertical: 2,
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  stepTitleFail: {
+    ...typography.bodyMedium,
+    color: colors.dangerText,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  stepDesc: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
+    marginTop: 1,
   },
-  infoValue: {
-    ...typography.captionMedium,
-    color: colors.textPrimary,
-    fontSize: 13,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.dangerBg,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.danger,
-    marginRight: 4,
-  },
-  statusText: {
-    ...typography.captionBold,
-    color: colors.danger,
-    fontSize: 11,
-  },
-  buttonGroup: {
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 24 : spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     gap: spacing.sm,
+    ...shadows.card,
   },
-  primaryButton: {
-    marginBottom: spacing.xs,
-  },
-  secondaryButton: {},
 });

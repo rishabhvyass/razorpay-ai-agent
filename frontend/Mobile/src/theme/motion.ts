@@ -1,22 +1,24 @@
 import { Easing } from 'react-native';
 
 export const motion = {
-  // Durations (in milliseconds)
+  // Centralized Durations (in milliseconds)
   duration: {
     instant: 80,
-    fast: 160,
-    normal: 240,
-    medium: 380,
-    slow: 550,
-    verySlow: 700,
-    breathing: 3200,
+    micro: 140, // 120–180ms
+    fast: 180,
+    standard: 240, // 200–300ms
+    normal: 250,
+    important: 380, // 350–500ms
+    medium: 400,
+    success: 600, // 500–700ms
+    slow: 650,
+    breathing: 3000,
   },
 
-  // Delays & Staggers
+  // Staggers
   stagger: {
     fast: 40,
-    normal: 60,
-    card: 80,
+    normal: 70, // Stagger cards: 0ms, 70ms, 140ms
     relaxed: 120,
   },
 
@@ -28,13 +30,13 @@ export const motion = {
       useNativeDriver: true,
     },
     snappy: {
-      tension: 100,
+      tension: 110,
       friction: 8,
       useNativeDriver: true,
     },
-    bouncy: {
-      tension: 75,
-      friction: 6,
+    sheet: {
+      tension: 70,
+      friction: 10,
       useNativeDriver: true,
     },
     subtle: {
@@ -52,22 +54,22 @@ export const motion = {
     linear: Easing.linear,
   },
 
-  // Scale Tokens
+  // Scale Tokens (Emil Kowalski tactile feedback)
   scale: {
-    press: 0.96,
+    press: 0.97,
     cardPress: 0.98,
-    buttonPress: 0.95,
+    buttonPress: 0.97,
+    pop: 1.05,
     pulseMin: 1.0,
-    pulseMax: 1.035,
-    pop: 1.08,
+    pulseMax: 1.04,
   },
 
   // Translation Tokens
   translate: {
     small: 8,
     medium: 16,
-    large: 24,
-    sheet: 300,
+    large: 20,
+    sheet: 400,
   },
 
   // Opacity Tokens

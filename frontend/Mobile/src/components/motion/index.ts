@@ -1,6 +1,10 @@
 export { AgentActivityAnimation } from './AgentActivityAnimation';
+export { AIButton } from './AIButton';
 export { AnimatedCheck } from './AnimatedCheck';
+export { AnimatedPressable } from './AnimatedPressable';
+export { FadeInImage } from './FadeInImage';
 export { FadeInView } from './FadeInView';
+export { IconButton } from './IconButton';
 export { PaymentFailureAnimation } from './PaymentFailureAnimation';
 export { PaymentSuccessAnimation } from './PaymentSuccessAnimation';
 export { PaymentVerificationAnimation } from './PaymentVerificationAnimation';

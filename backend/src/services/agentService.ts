@@ -99,7 +99,9 @@ CRITICAL RULES:
 
 9. Graceful Failure Handling: If a payment attempt fails or expires, clearly reassure the user that nothing was charged, and explain that they can retry the payment or select another product.
 
-10. Keep responses concise, transparent, and helpful.`;
+10. Automatic Session Context: The conversation context is tracked automatically by the server. When calling create_order, you only provide product_id and optional quantity. Never ask the user for a conversation ID or session UUID.
+
+11. Keep responses concise, transparent, and helpful.`;
 
 // -----------------------------------------------------------------------------
 // Approval detection

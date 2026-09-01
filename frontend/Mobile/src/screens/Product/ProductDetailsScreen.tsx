@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,17 +10,15 @@ import {
   View,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Minus, Plus, ShoppingBag } from 'lucide-react-native';
-import { Badge } from '../../components/common/Badge';
+import { ArrowLeft, Check, Minus, Plus, ShieldCheck } from 'lucide-react-native';
 import { Button } from '../../components/common/Button';
 import { ErrorState } from '../../components/common/ErrorState';
 import { Loading } from '../../components/common/Loading';
-import { PriceDisplay } from '../../components/products/PriceDisplay';
-import { ProductImage } from '../../components/products/ProductImage';
+import { AnimatedPressable, FadeInImage, IconButton, SlideUpView } from '../../components/motion';
 import { useProduct } from '../../hooks/useProducts';
 import { RootNavigationProp, RootStackParamList } from '../../navigation/types';
 import { useCheckoutStore } from '../../store/checkoutStore';
-import { colors, radius, spacing, typography } from '../../theme';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { formatMinorUnits } from '../../utils/currency';
 
 type ProductDetailsRouteProp = RouteProp<RootStackParamList, 'ProductDetails'>;
@@ -27,21 +27,17 @@ export function ProductDetailsScreen() {
   const route = useRoute<ProductDetailsRouteProp>();
   const navigation = useNavigation<RootNavigationProp>();
   const { productId } = route.params;
-  const { data: product, isLoading, isError, error, refetch } = useProduct(productId);
+  const { data: product, isLoading, isError, refetch } = useProduct(productId);
   const { selectProductForCheckout } = useCheckoutStore();
 
   const [quantity, setQuantity] = useState(1);
 
   const incrementQty = () => {
-    if (quantity < (product?.stock ?? 10) && quantity < 10) {
-      setQuantity((q) => q + 1);
-    }
+    if (quantity < 10) setQuantity((q) => q + 1);
   };
 
   const decrementQty = () => {
-    if (quantity > 1) {
-      setQuantity((q) => q - 1);
-    }
+    if (quantity > 1) setQuantity((q) => q - 1);
   };
 
   const handleBuyNow = () => {
@@ -53,7 +49,7 @@ export function ProductDetailsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Loading message="Loading product details..." style={styles.centerLoading} />
+        <Loading message="Loading product..." />
       </SafeAreaView>
     );
   }
@@ -63,117 +59,145 @@ export function ProductDetailsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ErrorState
           title="Product not found"
-          message={(error as Error)?.message || 'Unable to load product details from server.'}
+          message="Unable to load verified product details."
           onRetry={refetch}
         />
       </SafeAreaView>
     );
   }
 
+  const formattedUnitPrice = formatMinorUnits(product.price, product.currency);
   const totalMinor = product.price * quantity;
+  const formattedTotal = formatMinorUnits(totalMinor, product.currency);
+  const inStock = product.inStock !== false && (product.stock === undefined || product.stock > 0);
+  const imageUrl = product.imageUrl || 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800';
+
+  const themeColors = useThemeColors();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
+      {/* Editorial Top Bar */}
+      <View style={[styles.header, { backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
+        <IconButton
+          size={36}
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ArrowLeft size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Product Details</Text>
-        <View style={styles.headerRightPlaceholder} />
+          <ArrowLeft size={18} color={themeColors.textPrimary} />
+        </IconButton>
+        <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Product</Text>
+        <View style={styles.headerPlaceholder} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Large Product Image */}
-        <View style={styles.imageContainer}>
-          <ProductImage
-            uri={product.imageUrl}
-            width={320}
-            height={260}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Large Editorial Image */}
+        <SlideUpView distance={12} duration={240} style={styles.imageContainer}>
+          <FadeInImage
+            source={{ uri: imageUrl }}
             style={styles.heroImage}
+            resizeMode="cover"
           />
-        </View>
+        </SlideUpView>
 
-        {/* Metadata & Title */}
-        <View style={styles.infoCard}>
-          <View style={styles.metaRow}>
-            {product.category ? (
-              <Badge label={product.category.toUpperCase()} variant="info" size="sm" />
-            ) : null}
-            <Badge
-              label={product.inStock ? 'In stock' : 'Out of stock'}
-              variant={product.inStock ? 'success' : 'danger'}
-              size="sm"
-            />
+        {/* Product Information */}
+        <View style={styles.infoSection}>
+          <View style={styles.categoryRow}>
+            <Text style={[styles.category, { color: themeColors.primary }]}>{product.category || 'Curated Item'}</Text>
+            <View style={styles.stockBadge}>
+              <View
+                style={[
+                  styles.stockDot,
+                  { backgroundColor: inStock ? colors.success : colors.textMuted },
+                ]}
+              />
+              <Text style={[styles.stockText, { color: themeColors.textSecondary }]}>{inStock ? 'In stock' : 'Out of stock'}</Text>
+            </View>
           </View>
 
-          <Text style={styles.productTitle}>{product.name}</Text>
+          <Text style={[styles.title, { color: themeColors.textPrimary }]}>{product.name}</Text>
+          <Text style={[styles.price, { color: themeColors.textPrimary }]}>{formattedUnitPrice}</Text>
 
-          <View style={styles.priceContainer}>
-            <PriceDisplay amountMinor={product.price} currency={product.currency} size="lg" />
-            <Text style={styles.taxInclusive}>Inclusive of all taxes</Text>
-          </View>
+          <View style={[styles.divider, { backgroundColor: themeColors.borderSubtle }]} />
 
           {/* Description */}
-          <View style={styles.descSection}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.descriptionText}>
-              {product.description || 'No description available for this item.'}
-            </Text>
+          <Text style={[styles.sectionHeading, { color: themeColors.textPrimary }]}>Description</Text>
+          <Text style={[styles.description, { color: themeColors.textSecondary }]}>
+            {product.description ||
+              'Carefully selected and quality verified. Standard delivery within 2–4 business days with end-to-end cryptographic tracking.'}
+          </Text>
+
+          {/* Specifications */}
+          <Text style={[styles.sectionHeading, { color: themeColors.textPrimary }]}>Specifications</Text>
+          <View style={[styles.specsCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={styles.specRow}>
+              <Text style={[styles.specLabel, { color: themeColors.textSecondary }]}>Category</Text>
+              <Text style={[styles.specValue, { color: themeColors.textPrimary }]}>{product.category || 'Lifestyle'}</Text>
+            </View>
+            <View style={[styles.specDivider, { backgroundColor: themeColors.borderSubtle }]} />
+            <View style={styles.specRow}>
+              <Text style={[styles.specLabel, { color: themeColors.textSecondary }]}>Verification</Text>
+              <Text style={[styles.specValue, { color: themeColors.textPrimary }]}>Razorpay Catalog</Text>
+            </View>
+            <View style={[styles.specDivider, { backgroundColor: themeColors.borderSubtle }]} />
+            <View style={styles.specRow}>
+              <Text style={[styles.specLabel, { color: themeColors.textSecondary }]}>Availability</Text>
+              <Text style={[styles.specValue, { color: themeColors.textPrimary }]}>{inStock ? 'Immediate Dispatch' : 'Unavailable'}</Text>
+            </View>
           </View>
 
           {/* Quantity Selector */}
-          <View style={styles.quantitySection}>
-            <Text style={styles.sectionTitle}>Quantity</Text>
-            <View style={styles.stepperRow}>
-              <TouchableOpacity
+          <Text style={[styles.sectionHeading, { color: themeColors.textPrimary }]}>Quantity</Text>
+          <View style={[styles.quantityCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Text style={[styles.quantityLabel, { color: themeColors.textPrimary }]}>Selected units</Text>
+            <View style={styles.qtyControls}>
+              <AnimatedPressable
+                style={[styles.qtyButton, { backgroundColor: themeColors.backgroundSubtle, borderColor: themeColors.border }, quantity <= 1 && styles.qtyButtonDisabled]}
+                pressScale={0.90}
                 onPress={decrementQty}
                 disabled={quantity <= 1}
-                style={[styles.stepperButton, quantity <= 1 && styles.stepperDisabled]}
-                accessibilityRole="button"
                 accessibilityLabel="Decrease quantity"
               >
-                <Minus size={16} color={quantity <= 1 ? colors.textMuted : colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={styles.quantityValue}>{quantity}</Text>
-              <TouchableOpacity
+                <Minus size={14} color={quantity <= 1 ? themeColors.textMuted : themeColors.textPrimary} />
+              </AnimatedPressable>
+              <Text style={[styles.qtyText, { color: themeColors.textPrimary }]}>{quantity}</Text>
+              <AnimatedPressable
+                style={[styles.qtyButton, { backgroundColor: themeColors.backgroundSubtle, borderColor: themeColors.border }, quantity >= 10 && styles.qtyButtonDisabled]}
+                pressScale={0.90}
                 onPress={incrementQty}
-                disabled={quantity >= 10 || !product.inStock}
-                style={[
-                  styles.stepperButton,
-                  (quantity >= 10 || !product.inStock) && styles.stepperDisabled,
-                ]}
-                accessibilityRole="button"
+                disabled={quantity >= 10}
                 accessibilityLabel="Increase quantity"
               >
-                <Plus
-                  size={16}
-                  color={quantity >= 10 || !product.inStock ? colors.textMuted : colors.textPrimary}
-                />
-              </TouchableOpacity>
+                <Plus size={14} color={quantity >= 10 ? themeColors.textMuted : themeColors.textPrimary} />
+              </AnimatedPressable>
             </View>
+          </View>
+
+          {/* Security Assurance Banner */}
+          <View style={[styles.trustBanner, { backgroundColor: themeColors.primarySubtle }]}>
+            <ShieldCheck size={16} color={themeColors.primary} />
+            <Text style={[styles.trustText, { color: themeColors.primary }]}>
+              Purchases require your explicit confirmation before any order is created.
+            </Text>
           </View>
         </View>
       </ScrollView>
 
       {/* Sticky Bottom Bar */}
-      <View style={styles.bottomBar}>
-        <View style={styles.totalBox}>
-          <Text style={styles.totalLabel}>Total Amount</Text>
-          <Text style={styles.totalValue}>{formatMinorUnits(totalMinor, product.currency)}</Text>
+      <View style={[styles.bottomBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+        <View style={styles.bottomPriceCol}>
+          <Text style={[styles.bottomTotalLabel, { color: themeColors.textSecondary }]}>Total</Text>
+          <Text style={[styles.bottomPriceText, { color: themeColors.textPrimary }]}>{formattedTotal}</Text>
         </View>
         <Button
           title="Buy now"
           variant="primary"
           size="lg"
-          disabled={!product.inStock}
           onPress={handleBuyNow}
-          style={styles.buyButton}
-          leftIcon={<ShoppingBag size={18} color={colors.textInverse} />}
+          disabled={!inStock}
+          style={styles.buyNowBtn}
         />
       </View>
     </SafeAreaView>
@@ -189,111 +213,183 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingVertical: spacing.sm + 2,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     ...typography.h4,
     color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
-  headerRightPlaceholder: {
+  headerPlaceholder: {
     width: 36,
   },
-  centerLoading: {
-    flex: 1,
-    justifyContent: 'center',
-  },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 110,
   },
   imageContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    width: '100%',
+    height: 300,
+    backgroundColor: colors.surfaceSubtle,
   },
   heroImage: {
-    borderRadius: radius.lg,
+    width: '100%',
+    height: '100%',
   },
-  infoCard: {
-    padding: spacing.lg,
+  infoSection: {
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.xl,
   },
-  metaRow: {
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
   },
-  productTitle: {
-    ...typography.h2,
+  category: {
+    ...typography.captionBold,
+    color: colors.aiViolet,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  stockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  stockText: {
+    ...typography.captionMedium,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  title: {
+    ...typography.h1,
     color: colors.textPrimary,
-    marginBottom: spacing.sm,
+    fontSize: 22,
+    marginBottom: spacing.xs,
   },
-  priceContainer: {
+  price: {
+    ...typography.price,
+    color: colors.textPrimary,
+    fontSize: 22,
     marginBottom: spacing.lg,
   },
-  taxInclusive: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginBottom: spacing.lg,
   },
-  descSection: {
-    marginBottom: spacing.xl,
+  sectionHeading: {
+    ...typography.h4,
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
   },
-  sectionTitle: {
-    ...typography.captionBold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs + 2,
-  },
-  descriptionText: {
+  description: {
     ...typography.body,
     color: colors.textSecondary,
     lineHeight: 22,
+    marginBottom: spacing.xl,
   },
-  quantitySection: {
-    marginBottom: spacing.lg,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  specsCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.cards,
     borderWidth: 1,
     borderColor: colors.border,
-    alignSelf: 'flex-start',
-    padding: 4,
+    paddingHorizontal: spacing.cardPadding,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xl,
+    ...shadows.subtle,
   },
-  stepperButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceSubtle,
+  specRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm + 2,
+  },
+  specLabel: {
+    ...typography.secondary,
+    color: colors.textSecondary,
+  },
+  specValue: {
+    ...typography.secondaryBold,
+    color: colors.textPrimary,
+  },
+  specDivider: {
+    height: 1,
+    backgroundColor: colors.borderSubtle,
+  },
+  quantityCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPadding,
+    marginBottom: spacing.xl,
+    ...shadows.subtle,
+  },
+  quantityLabel: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+  },
+  qtyControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  qtyButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.backgroundSubtle,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  stepperDisabled: {
+  qtyButtonDisabled: {
     opacity: 0.4,
   },
-  quantityValue: {
-    ...typography.bodyBold,
-    fontSize: 16,
+  qtyText: {
+    ...typography.h4,
     color: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primarySubtle,
+    padding: spacing.md,
+    borderRadius: radius.inputs,
+    marginTop: spacing.xs,
+  },
+  trustText: {
+    ...typography.captionMedium,
+    color: colors.primary,
+    flex: 1,
+    lineHeight: 18,
   },
   bottomBar: {
     position: 'absolute',
@@ -303,25 +399,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
     backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 24 : spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    ...shadows.card,
   },
-  totalBox: {
-    flex: 1,
+  bottomPriceCol: {
+    justifyContent: 'center',
   },
-  totalLabel: {
+  bottomTotalLabel: {
     ...typography.caption,
-    color: colors.textMuted,
+    color: colors.textSecondary,
+    fontSize: 11,
   },
-  totalValue: {
-    ...typography.h3,
-    color: colors.accent,
-    fontSize: 18,
+  bottomPriceText: {
+    ...typography.price,
+    color: colors.textPrimary,
+    fontSize: 20,
   },
-  buyButton: {
-    flex: 1.2,
+  buyNowBtn: {
+    flex: 1,
+    marginLeft: spacing.lg,
+    maxWidth: 200,
   },
 });

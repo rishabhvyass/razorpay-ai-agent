@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import {
   Modal,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { MessageSquare, Mic, Settings, X } from 'lucide-react-native';
+import { Mic, X } from 'lucide-react-native';
+import { AnimatedPressable } from '../motion/AnimatedPressable';
+import { IconButton } from '../motion/IconButton';
 import { PulsingRing } from '../motion/PulsingRing';
-import { SlideUpView } from '../motion/SlideUpView';
 import { VoiceWaveform } from '../motion/VoiceWaveform';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 
 interface VoiceSearchModalProps {
   visible: boolean;
@@ -25,106 +25,94 @@ export function VoiceSearchModal({
   onClose,
   onSubmitQuery,
 }: VoiceSearchModalProps) {
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [seconds, setSeconds] = useState(0);
+  const themeColors = useThemeColors();
 
   useEffect(() => {
     if (!visible) {
-      setRecordingSeconds(0);
+      setSeconds(0);
       return;
     }
-
-    const timer = setInterval(() => {
-      setRecordingSeconds((prev) => prev + 1);
+    const interval = setInterval(() => {
+      setSeconds((s) => s + 1);
     }, 1000);
-
-    return () => clearInterval(timer);
+    return () => clearInterval(interval);
   }, [visible]);
 
-  const formattedTimer = `00:0${Math.min(recordingSeconds, 9)}`;
-
-  const handleStopRecording = () => {
-    onSubmitQuery?.('Can you recommend running shoes under ₹3,500?');
+  const handleSendQuery = (sampleQuery: string) => {
+    onSubmitQuery?.(sampleQuery);
     onClose();
   };
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Top Pill Badge */}
-          <SlideUpView distance={8} duration={motion.duration.fast}>
-            <View style={styles.listeningPill}>
-              <View style={styles.purpleDot} />
-              <Mic size={14} color={colors.primary} style={styles.micIcon} />
-              <Text style={styles.listeningText}>Concierge is listening...</Text>
-              <Text style={styles.timerText}>{formattedTimer}</Text>
-            </View>
-          </SlideUpView>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
+        {/* Top Bar with Close */}
+        <View style={styles.topBar}>
+          <IconButton
+            size={38}
+            backgroundColor={themeColors.surface}
+            onPress={onClose}
+            accessibilityLabel="Close voice mode"
+            style={[styles.closeBorder, { borderColor: themeColors.border }]}
+          >
+            <X size={18} color={themeColors.textPrimary} />
+          </IconButton>
+        </View>
 
-          {/* Center Speech Transcription */}
-          <SlideUpView distance={12} delay={60} duration={motion.duration.normal} style={styles.transcriptionWrapper}>
-            <View style={styles.transcriptionContainer}>
-              <Text style={styles.transcriptionLine}>
-                <Text style={styles.faintText}>Can you recommend </Text>
-              </Text>
-              <Text style={styles.transcriptionLine}>
-                <Text style={styles.boldText}>running shoes </Text>
-                <Text style={styles.faintText}>under</Text>
-              </Text>
-              <Text style={styles.transcriptionLine}>
-                <Text style={styles.boldText}>₹3,500</Text>
-                <Text style={styles.questionMark}>?</Text>
-              </Text>
-            </View>
-          </SlideUpView>
+        {/* Center Content */}
+        <View style={styles.content}>
+          {/* Status Capsule */}
+          <View style={[styles.statusPill, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={styles.pulseDot} />
+            <Text style={[styles.statusText, { color: themeColors.textPrimary }]}>Listening...</Text>
+            <Text style={[styles.timerText, { color: themeColors.textMuted }]}>00:0{Math.min(seconds, 9)}</Text>
+          </View>
 
-          {/* Bottom Waveform & Controls */}
-          <View style={styles.bottomSection}>
-            {/* Animated Equalizer Waveform */}
-            <View style={styles.waveformContainer}>
-              <VoiceWaveform active={visible} color={colors.primary} barCount={8} />
-            </View>
-
-            {/* Pulsing Central Mic Ring & Button */}
-            <View style={styles.micButtonContainer}>
-              <PulsingRing size={96} color={colors.primarySubtle} maxScale={1.2}>
-                <TouchableOpacity
-                  style={styles.mainMicButton}
-                  onPress={handleStopRecording}
-                  activeOpacity={0.85}
-                  accessibilityLabel="Stop recording and submit"
+          {/* Concentric Microphone Hero with Soft Aura Rings */}
+          <View style={styles.micCenterContainer}>
+            <PulsingRing size={164} color={themeColors.primarySubtle} minScale={1.0} maxScale={1.12}>
+              <PulsingRing size={120} color={themeColors.primarySubtle} minScale={1.0} maxScale={1.08}>
+                <AnimatedPressable
+                  style={[styles.micCircle, { backgroundColor: themeColors.primary }]}
+                  pressScale={0.92}
+                  onPress={() => handleSendQuery('Black hoodie under ₹2,000')}
+                  accessibilityLabel="Tap microphone"
                 >
-                  <Mic size={26} color={colors.textInverse} strokeWidth={2.4} />
-                </TouchableOpacity>
+                  <Mic size={32} color="#FFFFFF" strokeWidth={2.2} />
+                </AnimatedPressable>
               </PulsingRing>
-            </View>
+            </PulsingRing>
+          </View>
 
-            {/* Bottom Action Row */}
-            <View style={styles.bottomActions}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={onClose}
-                activeOpacity={0.7}
-              >
-                <X size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
+          {/* Live Waveform Indicator */}
+          <View style={styles.waveformWrapper}>
+            <VoiceWaveform barCount={9} color={themeColors.primary} />
+          </View>
 
-              <TouchableOpacity
-                style={styles.textButton}
-                onPress={handleStopRecording}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.textButtonLabel}>Search Concierge</Text>
-              </TouchableOpacity>
+          {/* User Instructions */}
+          <Text style={[styles.instruction, { color: themeColors.textSecondary }]}>
+            Tell your concierge what you're looking for, including budget or color preferences.
+          </Text>
 
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={onClose}
-                activeOpacity={0.7}
-              >
-                <Settings size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+          {/* Quick Suggested Queries */}
+          <View style={styles.quickPills}>
+            <AnimatedPressable
+              style={[styles.quickPill, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+              pressScale={0.95}
+              onPress={() => handleSendQuery('Black hoodie under ₹2,000')}
+              accessibilityLabel="Sample search black hoodie"
+            >
+              <Text style={[styles.quickPillText, { color: themeColors.textPrimary }]}>"Black hoodie under ₹2,000"</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.quickPill, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+              pressScale={0.95}
+              onPress={() => handleSendQuery('Running shoes under ₹3,500')}
+              accessibilityLabel="Sample search running shoes"
+            >
+              <Text style={[styles.quickPillText, { color: themeColors.textPrimary }]}>"Running shoes under ₹3,500"</Text>
+            </AnimatedPressable>
           </View>
         </View>
       </SafeAreaView>
@@ -135,129 +123,92 @@ export function VoiceSearchModal({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
   },
-  container: {
+  topBar: {
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: Platform.OS === 'ios' ? 4 : spacing.md,
+    paddingBottom: spacing.sm,
+    alignItems: 'flex-end',
+  },
+  closeBorder: {
+    borderWidth: 1,
+  },
+  content: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingBottom: spacing.xxl,
   },
-  listeningPill: {
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primaryUltraLight,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.testModeBorder,
+    marginBottom: spacing.xxl,
+    gap: spacing.sm,
+    ...shadows.subtle,
   },
-  purpleDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    marginRight: 6,
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
   },
-  micIcon: {
-    marginRight: 6,
-  },
-  listeningText: {
+  statusText: {
     ...typography.captionBold,
-    fontSize: 12,
-    color: colors.primary,
+    fontSize: 13,
   },
   timerText: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.primaryDark,
-    marginLeft: 8,
-    fontVariant: ['tabular-nums'],
+    ...typography.captionMedium,
+    fontSize: 12,
   },
-  transcriptionWrapper: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  transcriptionContainer: {
-    paddingVertical: spacing.xl,
-  },
-  transcriptionLine: {
-    marginBottom: 4,
-  },
-  faintText: {
-    ...typography.h1,
-    fontSize: 32,
-    color: colors.textTertiary,
-    fontWeight: '700',
-    lineHeight: 42,
-  },
-  boldText: {
-    ...typography.h1,
-    fontSize: 32,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    lineHeight: 42,
-  },
-  questionMark: {
-    ...typography.h1,
-    fontSize: 32,
-    color: colors.primary,
-    fontWeight: '700',
-    lineHeight: 42,
-  },
-  bottomSection: {
+  micCenterContainer: {
+    width: 170,
+    height: 170,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing.lg,
   },
-  waveformContainer: {
-    marginBottom: spacing.lg,
+  micCircle: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.primaryButton,
   },
-  micButtonContainer: {
+  waveformWrapper: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing.lg,
+  },
+  instruction: {
+    ...typography.body,
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 22,
+    marginTop: spacing.sm,
     marginBottom: spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  mainMicButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  bottomActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  quickPills: {
+    gap: spacing.sm,
     width: '100%',
-    paddingHorizontal: spacing.sm,
+    maxWidth: 300,
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surfaceSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
+  quickPill: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.inputs,
     borderWidth: 1,
-    borderColor: colors.border,
+    alignItems: 'center',
+    ...shadows.subtle,
   },
-  textButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: colors.primary,
-    borderRadius: radius.full,
-  },
-  textButtonLabel: {
-    ...typography.captionBold,
-    color: colors.textInverse,
+  quickPillText: {
+    ...typography.captionMedium,
     fontSize: 13,
   },
 });

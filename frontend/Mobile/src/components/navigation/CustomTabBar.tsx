@@ -9,7 +9,8 @@ import {
   View,
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Bot, List, ShoppingBag } from 'lucide-react-native';
+import { LayoutGrid, ShoppingBag, Sparkles } from 'lucide-react-native';
+import { colors, radius, shadows, typography, useThemeColors } from '../../theme';
 import { motion } from '../../theme/motion';
 import { useReduceMotion } from '../../hooks/motion/useReduceMotion';
 
@@ -22,6 +23,7 @@ interface TabItemProps {
 
 function TabItem({ label, icon, isFocused, onPress }: TabItemProps) {
   const reduceMotion = useReduceMotion();
+  const themeColors = useThemeColors();
   const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -47,7 +49,7 @@ function TabItem({ label, icon, isFocused, onPress }: TabItemProps) {
     <TouchableOpacity
       style={[
         styles.tabItem,
-        isFocused && styles.tabItemFocused,
+        isFocused && [styles.tabItemFocused, { backgroundColor: themeColors.primarySubtle }],
       ]}
       onPress={onPress}
       activeOpacity={0.75}
@@ -60,7 +62,7 @@ function TabItem({ label, icon, isFocused, onPress }: TabItemProps) {
       <Text
         style={[
           styles.tabLabel,
-          isFocused ? styles.tabLabelFocused : styles.tabLabelInactive,
+          isFocused ? [styles.tabLabelFocused, { color: themeColors.primary }] : [styles.tabLabelInactive, { color: themeColors.textMuted }],
         ]}
         numberOfLines={1}
       >
@@ -71,6 +73,7 @@ function TabItem({ label, icon, isFocused, onPress }: TabItemProps) {
 }
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const themeColors = useThemeColors();
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
@@ -89,39 +92,42 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     };
   }, []);
 
-  if (isKeyboardVisible) {
+  const currentRoute = state.routes[state.index];
+  const isAIPage = currentRoute?.name === 'AITab' || currentRoute?.name === 'ChatTab';
+
+  if (isKeyboardVisible || isAIPage) {
     return null;
   }
 
   const getTabInfo = (routeName: string, isFocused: boolean) => {
-    const iconColor = isFocused ? '#18181b' : '#71717a';
-    const iconSize = 21;
-
     switch (routeName) {
-      case 'ProductsTab':
-      case 'ExploreTab':
-        return {
-          label: 'Products',
-          icon: <ShoppingBag size={iconSize} color={iconColor} strokeWidth={isFocused ? 2.4 : 1.9} />,
-        };
       case 'AITab':
       case 'ChatTab':
         return {
-          label: 'AI',
-          icon: <Bot size={iconSize} color={iconColor} strokeWidth={isFocused ? 2.4 : 1.9} />,
+          label: 'Concierge',
+          icon: <Sparkles size={18} color={isFocused ? themeColors.primary : themeColors.textMuted} />,
+        };
+      case 'ProductsTab':
+        return {
+          label: 'Catalog',
+          icon: <LayoutGrid size={18} color={isFocused ? themeColors.primary : themeColors.textMuted} />,
         };
       case 'OrdersTab':
+        return {
+          label: 'Orders',
+          icon: <ShoppingBag size={18} color={isFocused ? themeColors.primary : themeColors.textMuted} />,
+        };
       default:
         return {
-          label: 'Order',
-          icon: <List size={iconSize} color={iconColor} strokeWidth={isFocused ? 2.4 : 1.9} />,
+          label: routeName,
+          icon: <Sparkles size={18} color={isFocused ? themeColors.primary : themeColors.textMuted} />,
         };
     }
   };
 
   return (
-    <View style={styles.floatingWrapper} pointerEvents="box-none">
-      <View style={styles.capsuleContainer}>
+    <View style={styles.floatingContainer} pointerEvents="box-none">
+      <View style={[styles.tabPill, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
           const { label, icon } = getTabInfo(route.name, isFocused);
@@ -154,59 +160,50 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 }
 
 const styles = StyleSheet.create({
-  floatingWrapper: {
+  floatingContainer: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 22 : 14,
+    bottom: Platform.OS === 'ios' ? 24 : 16,
     left: 0,
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  capsuleContainer: {
+  tabPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    borderRadius: 36,
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
     paddingHorizontal: 8,
-    paddingVertical: 5,
-    width: '84%',
-    maxWidth: 340,
-    height: 62,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#e4e4e7',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   tabItem: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderRadius: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    gap: 6,
   },
   tabItemFocused: {
-    backgroundColor: '#f4f4f5',
+    backgroundColor: colors.primarySubtle,
   },
   iconContainer: {
-    marginBottom: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabLabel: {
-    fontSize: 11,
-    letterSpacing: 0.2,
+    ...typography.captionBold,
+    fontSize: 13,
   },
   tabLabelFocused: {
-    color: '#18181b',
+    color: colors.primary,
     fontWeight: '700',
   },
   tabLabelInactive: {
-    color: '#71717a',
+    color: colors.textMuted,
     fontWeight: '500',
   },
 });

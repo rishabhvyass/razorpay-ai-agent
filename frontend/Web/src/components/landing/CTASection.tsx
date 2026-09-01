@@ -1,46 +1,38 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Bot, Sparkles } from 'lucide-react';
+import { ArrowRight, Bot, Github } from 'lucide-react';
 
 export function CTASection() {
   return (
-    <section className="py-16">
+    <section className="py-16 sm:py-20 md:py-28 bg-[#F8FAFC] dark:bg-[#090D16] border-t border-[#E2E8F0] dark:border-[#1E293B]">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-purple-700 via-indigo-600 to-purple-600 p-8 sm:p-12 text-center text-white shadow-2xl shadow-purple-950/20">
-          {/* Subtle ambient circle */}
-          <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-purple-400/20 blur-2xl" />
+        <div className="rounded-3xl border border-[#CBD5E1] bg-white p-6 sm:p-10 md:p-14 text-center shadow-card dark:border-[#334155] dark:bg-[#0F172A]">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-[#0F172A] dark:text-white max-w-2xl mx-auto leading-[1.08]">
+            Make your merchant ready for AI buyers.
+          </h2>
 
-          <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-purple-100 backdrop-blur-md">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Production Ready Architecture</span>
-            </div>
+          <p className="mt-4 text-base sm:text-lg text-[#475569] dark:text-[#94A3B8] max-w-[48ch] mx-auto leading-relaxed">
+            Checkout Concierge turns conversation into safe, explainable and transactable commerce through Razorpay.
+          </p>
 
-            <h2 className="text-3xl font-extrabold sm:text-4xl tracking-tight">
-              Ready to let AI safely close the sale?
-            </h2>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5">
+            <Link
+              to="/checkout"
+              className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#0C66E4] px-6 py-3 text-sm font-semibold text-white shadow-blue-cta hover:bg-[#0047B3] active:scale-[0.99] transition-all focus-visible:outline-2 focus-visible:outline-[#0C66E4]"
+            >
+              <Bot className="h-4 w-4" aria-hidden="true" />
+              <span>Try Checkout Concierge</span>
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
 
-            <p className="text-purple-100 text-sm sm:text-base leading-relaxed">
-              Experience the live autonomous commerce assistant with guarded human-in-the-loop payment verification today.
-            </p>
-
-            <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                to="/checkout"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-bold text-purple-700 shadow-md hover:bg-purple-50 active:scale-[0.98] transition-all"
-              >
-                <Bot className="h-4 w-4" />
-                <span>Launch Agent Demo</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-
-              <Link
-                to="/products"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white hover:bg-white/20 backdrop-blur-md transition-all"
-              >
-                <span>Browse Catalog</span>
-              </Link>
-            </div>
+            <a
+              href="https://github.com/rishabhvyass/razorpay-ai-agent"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-6 py-3 text-sm font-semibold text-[#0F172A] shadow-subtle hover:bg-[#F8FAFC] dark:border-[#1E293B] dark:bg-[#0F172A] dark:text-white dark:hover:bg-[#1E293B] transition-all focus-visible:outline-2 focus-visible:outline-[#0C66E4]"
+            >
+              <Github className="h-4 w-4" aria-hidden="true" />
+              <span>View GitHub</span>
+            </a>
           </div>
         </div>
       </div>

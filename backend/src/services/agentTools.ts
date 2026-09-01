@@ -130,10 +130,6 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
           type: 'number',
           description: 'How many to buy. Defaults to 1.',
         },
-        conversation_id: {
-          type: 'string',
-          description: 'UUID of the current conversation.',
-        },
       },
       required: ['product_id'],
     },
@@ -151,10 +147,6 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         order_id: {
           type: 'string',
           description: 'UUID of the order to create a payment link for.',
-        },
-        conversation_id: {
-          type: 'string',
-          description: 'UUID of the current conversation.',
         },
       },
       required: ['order_id'],
@@ -270,10 +262,6 @@ export const OPENAI_TOOL_DEFINITIONS = [
             type: 'number',
             description: 'Number of units. Defaults to 1.',
           },
-          conversation_id: {
-            type: 'string',
-            description: 'The current conversation UUID to link this order to.',
-          },
         },
         required: ['product_id'],
       },
@@ -293,10 +281,6 @@ export const OPENAI_TOOL_DEFINITIONS = [
           order_id: {
             type: 'string',
             description: 'The UUID of the order to create a payment link for.',
-          },
-          conversation_id: {
-            type: 'string',
-            description: 'The current conversation UUID.',
           },
         },
         required: ['order_id'],

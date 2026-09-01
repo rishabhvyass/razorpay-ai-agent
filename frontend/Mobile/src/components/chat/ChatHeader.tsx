@@ -1,64 +1,98 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ArrowLeft, CircleHelp, Search, Zap } from 'lucide-react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { ArrowLeft, LayoutGrid, Mic, Moon, ShoppingBag, Sparkles, Sun } from 'lucide-react-native';
+import { IconButton } from '../motion/IconButton';
+import { useThemeStore } from '../../store/themeStore';
+import { colors, radius, spacing, typography, useThemeColors } from '../../theme';
 
 interface ChatHeaderProps {
   onSearchPress?: () => void;
-  onZapPress?: () => void;
   onBackPress?: () => void;
+  onProductsPress?: () => void;
+  onOrdersPress?: () => void;
 }
 
-export function ChatHeader({ onSearchPress, onZapPress, onBackPress }: ChatHeaderProps) {
+export function ChatHeader({
+  onSearchPress,
+  onBackPress,
+  onProductsPress,
+  onOrdersPress,
+}: ChatHeaderProps) {
+  const isDark = useThemeStore((state) => state.isDark);
+  const toggleTheme = useThemeStore((state) => state.toggleTheme);
+  const themeColors = useThemeColors();
+
   return (
-    <View style={styles.header}>
-      {/* Back Button if present */}
-      {onBackPress ? (
-        <TouchableOpacity
-          onPress={onBackPress}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-      ) : null}
+    <View style={[styles.header, { backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
+      <View style={styles.leftContainer}>
+        {onBackPress && (
+          <IconButton
+            size={36}
+            onPress={onBackPress}
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={18} color={themeColors.textPrimary} />
+          </IconButton>
+        )}
 
-      {/* Left Avatar Badge */}
-      <View style={styles.avatarBadge}>
-        <CircleHelp size={20} color={colors.textInverse} strokeWidth={2.2} />
-      </View>
+        <View style={[styles.avatar, { backgroundColor: themeColors.primarySubtle }]}>
+          <Sparkles size={15} color={themeColors.primary} />
+        </View>
 
-      {/* Center Details */}
-      <View style={styles.centerContainer}>
-        <Text style={styles.title}>Checkout Concierge</Text>
-        <View style={styles.subtitleRow}>
-          <Text style={styles.agentSubtitle}>AI Commerce Agent</Text>
-          <Text style={styles.dotSeparator}>•</Text>
-          <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>Online</Text>
-          <View style={styles.testModePill}>
-            <Text style={styles.testModeText}>TEST MODE</Text>
+        <View style={styles.titleColumn}>
+          <Text style={[styles.title, { color: themeColors.textPrimary }]}>Checkout Concierge</Text>
+          <View style={styles.statusRow}>
+            <Text style={[styles.subtitle, { color: themeColors.textSecondary }]}>AI Commerce Agent</Text>
+            <Text style={[styles.dotSeparator, { color: themeColors.textMuted }]}>·</Text>
+            <View style={styles.onlineDot} />
+            <Text style={styles.onlineText}>Online</Text>
           </View>
         </View>
       </View>
 
-      {/* Right Action Icons */}
-      <View style={styles.rightActions}>
-        <TouchableOpacity
-          onPress={onZapPress}
-          style={styles.iconButton}
-          activeOpacity={0.7}
+      <View style={styles.rightContainer}>
+        {/* Theme Mode Toggle Button */}
+        <IconButton
+          size={36}
+          onPress={toggleTheme}
+          accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          <Zap size={19} color={colors.textSecondary} />
-        </TouchableOpacity>
+          {isDark ? (
+            <Sun size={16} color="#FBBF24" />
+          ) : (
+            <Moon size={16} color={themeColors.textSecondary} />
+          )}
+        </IconButton>
 
-        <TouchableOpacity
-          onPress={onSearchPress}
-          style={styles.iconButton}
-          activeOpacity={0.7}
-        >
-          <Search size={19} color={colors.textSecondary} />
-        </TouchableOpacity>
+        {onProductsPress && (
+          <IconButton
+            size={36}
+            onPress={onProductsPress}
+            accessibilityLabel="View Products Catalog"
+          >
+            <LayoutGrid size={16} color={themeColors.textSecondary} />
+          </IconButton>
+        )}
+
+        {onOrdersPress && (
+          <IconButton
+            size={36}
+            onPress={onOrdersPress}
+            accessibilityLabel="View Orders"
+          >
+            <ShoppingBag size={16} color={themeColors.textSecondary} />
+          </IconButton>
+        )}
+
+        {onSearchPress && (
+          <IconButton
+            size={36}
+            onPress={onSearchPress}
+            accessibilityLabel="Voice search"
+          >
+            <Mic size={16} color={themeColors.textSecondary} />
+          </IconButton>
+        )}
       </View>
     </View>
   );
@@ -66,91 +100,61 @@ export function ChatHeader({ onSearchPress, onZapPress, onBackPress }: ChatHeade
 
 const styles = StyleSheet.create({
   header: {
-    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingVertical: spacing.sm + 2,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
   },
-  backButton: {
-    width: 36,
-    height: 36,
+  leftContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 4,
   },
-  avatarBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  centerContainer: {
-    flex: 1,
+  titleColumn: {
     justifyContent: 'center',
   },
   title: {
-    ...typography.bodyBold,
-    fontSize: 16,
-    color: colors.textPrimary,
+    ...typography.h3,
+    fontSize: 15,
     fontWeight: '700',
   },
-  subtitleRow: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    gap: 4,
+    marginTop: 1,
   },
-  agentSubtitle: {
+  subtitle: {
     ...typography.caption,
     fontSize: 11,
-    color: colors.textMuted,
   },
   dotSeparator: {
     ...typography.caption,
-    fontSize: 11,
-    color: colors.textMuted,
-    marginHorizontal: 4,
   },
   onlineDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: colors.success,
-    marginRight: 3,
   },
   onlineText: {
-    ...typography.caption,
+    ...typography.captionMedium,
+    color: colors.success,
     fontSize: 11,
-    color: colors.successText,
     fontWeight: '600',
-    marginRight: 6,
   },
-  testModePill: {
-    backgroundColor: colors.testModeBg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  testModeText: {
-    ...typography.captionBold,
-    fontSize: 9,
-    color: colors.testModeText,
-    letterSpacing: 0.5,
-  },
-  rightActions: {
+  rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.xs,
   },
 });

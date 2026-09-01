@@ -1,246 +1,167 @@
 import { Link } from 'react-router-dom';
-import {
-  ArrowRight,
-  Bot,
-  CheckCircle2,
-  Clock,
-  Code2,
-  Lock,
-  Package,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-} from 'lucide-react';
-
-const CAPABILITY_PILLS = [
-  { icon: Sparkles, label: 'Autonomous Catalog Search' },
-  { icon: ShieldCheck, label: 'Guarded Money Actions' },
-  { icon: Zap, label: 'Razorpay Webhook Verification' },
-  { icon: Package, label: 'Live PostgreSQL Order Sync' },
-  { icon: Lock, label: 'Immutable Audit Log' },
-];
+import { ArrowRight, Bot, Check, ChevronRight, Lock, ShieldCheck } from 'lucide-react';
 
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-28">
-      {/* Background Soft Purple/Indigo Radial Glow */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-purple-400/20 via-indigo-400/15 to-transparent blur-3xl dark:from-purple-900/30 dark:via-indigo-900/20" />
-
+    <section className="relative pt-12 pb-20 sm:pt-16 sm:pb-24 md:pt-20 md:pb-28 bg-[#F8FAFC] dark:bg-[#090D16] border-b border-[#E2E8F0] dark:border-[#1E293B]">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Eyebrow Badge */}
-        <div className="flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-purple-200 bg-purple-50/80 px-4 py-1.5 text-xs font-semibold text-purple-700 shadow-sm backdrop-blur-sm dark:border-purple-800/60 dark:bg-purple-950/50 dark:text-purple-300">
-            <span className="flex h-2 w-2 rounded-full bg-purple-600 animate-pulse" />
-            <span>AI-Native Autonomous Commerce Agent</span>
-            <span className="text-purple-300 dark:text-purple-700">•</span>
-            <span className="font-bold text-purple-800 dark:text-purple-200">Razorpay Verified</span>
-          </div>
-        </div>
+        {/* Asymmetric Hero Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+          {/* Left Column: Authoritative Editorial Copy */}
+          <div className="lg:col-span-6 space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-3.5 py-1 text-xs font-semibold text-[#0F172A] shadow-subtle dark:border-[#1E293B] dark:bg-[#0F172A] dark:text-white">
+              <span className="flex h-2 w-2 rounded-full bg-[#0C66E4]" aria-hidden="true" />
+              <span>Razorpay AI Builder Track 01</span>
+              <span className="text-[#94A3B8]">•</span>
+              <span className="text-[#0C66E4] dark:text-[#388BFF] font-medium">Model Context Protocol</span>
+            </div>
 
-        {/* Main Hero Heading */}
-        <div className="mx-auto mt-6 max-w-4xl text-center">
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-6xl dark:text-white">
-            AI can recommend almost anything. <br />
-            <span className="bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 bg-clip-text text-transparent">
-              But recommendations aren’t transactions.
-            </span>
-          </h1>
+            <h1 className="text-3xl xs:text-4xl sm:text-5xl lg:text-[54px] font-bold tracking-tight text-[#0F172A] dark:text-white leading-[1.08]">
+              AI that doesn’t stop at recommendations. <br className="hidden sm:inline" />
+              <span className="text-[#0C66E4] dark:text-[#388BFF]">It actually checks out.</span>
+            </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-base text-slate-600 sm:text-lg dark:text-slate-300 leading-relaxed">
-            Checkout Concierge bridges natural language product search with deterministic PostgreSQL transactions, strict human authorization gates, and cryptographic Razorpay webhook verification.
-          </p>
+            <p className="text-base sm:text-lg text-[#475569] dark:text-[#94A3B8] leading-relaxed max-w-[48ch]">
+              Checkout Concierge turns natural conversation into a complete, verified purchase through Razorpay.
+            </p>
 
-          {/* Action CTAs */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              to="/checkout"
-              className="inline-flex items-center gap-2.5 rounded-xl bg-purple-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-purple-500/25 hover:bg-purple-700 hover:shadow-purple-500/35 active:scale-[0.98] transition-all"
-            >
-              <Bot className="h-5 w-5" />
-              <span>Launch Live Agent Demo</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-
-            <a
-              href="#agent-in-action"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white transition-all"
-            >
-              <Code2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              <span>Inspect Architecture</span>
-            </a>
-          </div>
-        </div>
-
-        {/* Capability Pills Strip */}
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-          {CAPABILITY_PILLS.map((item, idx) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={idx}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-slate-700 shadow-xs backdrop-blur-xs dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300"
+            {/* CTAs with 44px min touch targets */}
+            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <Link
+                to="/checkout"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#0C66E4] px-6 py-3 text-[14px] font-semibold text-white shadow-blue-cta hover:bg-[#0047B3] active:scale-[0.99] transition-all focus-visible:outline-2 focus-visible:outline-[#0C66E4]"
               >
-                <Icon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                <span>{item.label}</span>
-              </div>
-            );
-          })}
-        </div>
+                <Bot className="h-4 w-4" />
+                <span>Try Checkout Concierge</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
 
-        {/* Interactive Dual-Pane Hero Showcase Card */}
-        <div className="mt-12 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-purple-950/10 dark:border-slate-800 dark:bg-slate-900">
-          {/* Top Window Bar */}
-          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-red-400/80" />
-              <div className="h-3 w-3 rounded-full bg-amber-400/80" />
-              <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
-              <span className="ml-2 text-xs font-mono text-slate-500 dark:text-slate-400">
-                checkout-concierge.agent-orchestration
-              </span>
+              <a
+                href="#how-it-works"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-5 py-3 text-[14px] font-semibold text-[#0F172A] shadow-subtle hover:bg-[#F8FAFC] dark:border-[#1E293B] dark:bg-[#0F172A] dark:text-white dark:hover:bg-[#1E293B] transition-all focus-visible:outline-2 focus-visible:outline-[#0C66E4]"
+              >
+                <span>See how it works</span>
+                <ChevronRight className="h-4 w-4 text-[#475569]" />
+              </a>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                Agent Status: Online (Test Mode)
-              </span>
+            {/* Invariant Trust Bar */}
+            <div className="pt-4 border-t border-[#E2E8F0] dark:border-[#1E293B] flex items-center gap-2.5 text-xs text-[#475569] dark:text-[#94A3B8]">
+              <ShieldCheck className="h-4 w-4 text-[#16A34A] shrink-0" />
+              <span>Bounded Financial Authority · Explicit Human Approval Invariant</span>
             </div>
           </div>
 
-          {/* Dual Column Layout: Left Conversational UI, Right Agent Action Inspector */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
-            {/* Left: Chat Turn & Interactive Product Card */}
-            <div className="p-6 lg:col-span-7 flex flex-col justify-between bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-950/40">
-              <div className="space-y-4">
-                {/* User Message */}
+          {/* Right Column: High-Fidelity Product & Authorization Gate */}
+          <div className="lg:col-span-6">
+            <div className="overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-card dark:border-[#1E293B] dark:bg-[#0F172A]">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 dark:border-[#1E293B] dark:bg-[#0A0F1D]">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#0F172A] dark:text-white">
+                  <div className="h-2 w-2 rounded-full bg-[#16A34A]" />
+                  <span>Agent Session · #sess_8910a</span>
+                </div>
+                <span className="rounded bg-[#EBF3FF] px-2.5 py-0.5 font-mono text-[10px] font-semibold text-[#0C66E4] border border-[#0C66E4]/20 dark:bg-[#0C2147] dark:text-[#388BFF]">
+                  Razorpay Sandbox
+                </span>
+              </div>
+
+              {/* Chat Turn */}
+              <div className="p-4 sm:p-6 space-y-4">
+                {/* User Intent Message */}
                 <div className="flex justify-end">
-                  <div className="rounded-2xl rounded-tr-sm bg-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm max-w-sm">
-                    Find me a black hoodie under ₹2,000
+                  <div className="rounded-2xl rounded-tr-xs bg-[#0F172A] px-4 py-2.5 text-xs sm:text-sm font-medium text-white max-w-sm dark:bg-[#1E293B]">
+                    Find me a black hoodie under ₹2,000.
                   </div>
                 </div>
 
-                {/* Assistant Message */}
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-600 text-white shadow-xs">
-                    <Sparkles className="h-4 w-4" />
+                {/* Assistant Response */}
+                <div className="space-y-3">
+                  <div className="rounded-2xl rounded-tl-xs bg-[#F8FAFC] px-4 py-2.5 text-xs sm:text-sm text-[#0F172A] dark:bg-[#1E293B] dark:text-white border border-[#E2E8F0] dark:border-[#1E293B]">
+                    I located the best match in the verified merchant catalog within your ₹2,000 budget.
                   </div>
-                  <div className="space-y-3">
-                    <div className="rounded-2xl rounded-tl-sm bg-slate-100 px-4 py-2.5 text-sm text-slate-800 dark:bg-slate-800 dark:text-slate-100 max-w-md">
-                      I searched our catalog in PostgreSQL. Here is the verified option under your budget:
-                    </div>
 
-                    {/* Interactive Product Preview Card */}
-                    <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-800/90 max-w-sm">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=300"
-                          alt="Midnight Zip Hoodie"
-                          className="h-16 w-16 rounded-lg object-cover bg-slate-100"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                            Midnight Zip Hoodie
+                  {/* Verified Item Card */}
+                  <div className="rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-subtle dark:border-[#1E293B] dark:bg-[#0F172A]">
+                    <div className="flex items-center gap-3.5">
+                      <img
+                        src="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=300"
+                        alt="Essential Black Hoodie front product view"
+                        className="h-16 w-16 shrink-0 rounded-lg object-cover bg-[#F1F5F9] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#1E293B]"
+                        loading="lazy"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-xs sm:text-sm font-bold text-[#0F172A] dark:text-white truncate">
+                            Essential Black Hoodie
                           </h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            320 GSM Loopback Cotton · Black
-                          </p>
-                          <div className="mt-1 flex items-center justify-between">
-                            <span className="text-sm font-extrabold text-slate-900 dark:text-white">
-                              ₹1,499.00
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                              ● In Stock: 27
-                            </span>
-                          </div>
+                          <span className="text-[10px] font-semibold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded border border-[#BBF7D0] dark:bg-[#052E16] dark:text-[#4ADE80] dark:border-[#14532D] shrink-0">
+                            27 in stock
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#475569] dark:text-[#94A3B8] mt-0.5 truncate">
+                          320 GSM Cotton Fleece · Size: L
+                        </p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-sm font-bold text-[#0F172A] dark:text-white nums">
+                            ₹1,499.00
+                          </span>
+                          <span className="font-mono text-[10px] text-[#94A3B8]">
+                            149900 paise
+                          </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
 
-                      <div className="mt-3 flex gap-2">
-                        <Link
-                          to="/checkout"
-                          className="flex-1 rounded-lg bg-purple-600 py-2 text-center text-xs font-bold text-white hover:bg-purple-700 transition-colors shadow-xs"
-                        >
-                          Authorize Purchase
-                        </Link>
+                  {/* Financial Consent / Authorization Gate */}
+                  <div className="rounded-xl border border-[#CBD5E1] bg-[#EBF3FF]/60 p-4 dark:border-[#334155] dark:bg-[#0C2147]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0C66E4] text-white shadow-xs">
+                        <Lock className="h-4 w-4" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-[#0F172A] dark:text-white block">
+                          Human Authorization Required
+                        </span>
+                        <span className="text-[11px] text-[#475569] dark:text-[#94A3B8]">
+                          Order #ord_NxK7Pq2d · Total: <strong className="text-[#0F172A] dark:text-white nums">₹1,499.00</strong>
+                        </span>
                       </div>
                     </div>
+
+                    <Link
+                      to="/checkout"
+                      className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg bg-[#0C66E4] px-4 py-2 text-xs font-bold text-white hover:bg-[#0047B3] transition-colors shadow-xs shrink-0 focus-visible:outline-2 focus-visible:outline-[#0C66E4]"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Confirm & Pay</span>
+                    </Link>
                   </div>
                 </div>
-              </div>
-
-              {/* Bottom Interactive Typing Bar */}
-              <div className="mt-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-xs dark:border-slate-800 dark:bg-slate-800">
-                <input
-                  type="text"
-                  placeholder="Ask Concierge e.g. 'Can you recommend running shoes under ₹3,500?'"
-                  className="flex-1 bg-transparent px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:text-white"
-                  readOnly
-                  value="Find me a black hoodie under ₹2,000"
-                />
-                <Link
-                  to="/checkout"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Right: Live Agent Action Inspector Terminal */}
-            <div className="p-6 lg:col-span-5 bg-slate-950 text-slate-300 font-mono text-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                  <span className="text-purple-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                    <Zap className="h-3.5 w-3.5" /> Agent Execution Trace
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-sans">
-                    Real-time Tool Dispatch
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2.5 text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-slate-100">search_products(q: "hoodie", maxPrice: 200000)</div>
-                      <div className="text-[11px] text-slate-400">Matched 2 items in Postgres catalog (14ms)</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5 text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-slate-100">check_inventory(productId: "ce8732a1...")</div>
-                      <div className="text-[11px] text-slate-400">Stock verified: 27 units available</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5 text-purple-400">
-                    <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-slate-100">enforce_human_authorization_gate()</div>
-                      <div className="text-[11px] text-slate-400">Direct money movement paused pending user confirmation</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2.5 text-amber-400">
-                    <Clock className="h-4 w-4 shrink-0 mt-0.5 animate-spin" />
-                    <div>
-                      <div className="font-semibold text-slate-100">awaiting_user_confirmation()</div>
-                      <div className="text-[11px] text-slate-400">Draft Order created: #ord_NxK7Pq2d (₹1,499.00)</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Terminal Signature Footer */}
-              <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-                <span>Webhook Signature: SHA256 Verified</span>
-                <span className="text-emerald-400 font-bold">PG LOCKED</span>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Minimal Stack Overview */}
+        <div className="mt-12 pt-6 border-t border-[#E2E8F0] dark:border-[#1E293B] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#475569] dark:text-[#94A3B8] gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B]">
+              Architecture:
+            </span>
+            <span>AI Agent Core</span>
+            <span>•</span>
+            <span>Model Context Protocol (MCP)</span>
+            <span>•</span>
+            <span>Supabase PostgreSQL</span>
+            <span>•</span>
+            <span className="font-semibold text-[#0C66E4] dark:text-[#388BFF]">Razorpay Sandbox</span>
+          </div>
+
+          <span className="font-mono text-[11px] text-[#94A3B8]">
+            HMAC-SHA256 Webhook Proofs
+          </span>
         </div>
       </div>
     </section>

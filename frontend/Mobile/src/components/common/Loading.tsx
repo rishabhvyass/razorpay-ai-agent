@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { colors, spacing, typography } from '../../theme';
+import { spacing, typography, useThemeColors } from '../../theme';
 
 export interface LoadingProps {
   message?: string;
@@ -8,11 +8,13 @@ export interface LoadingProps {
   style?: ViewStyle;
 }
 
-export function Loading({ message = 'Loading...', size = 'large', style }: LoadingProps) {
+export function Loading({ message = 'Searching your catalog...', size = 'small', style }: LoadingProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={[styles.container, style]}>
-      <ActivityIndicator size={size} color={colors.accent} />
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <ActivityIndicator size={size} color={themeColors.primary} />
+      {message ? <Text style={[styles.message, { color: themeColors.textSecondary }]}>{message}</Text> : null}
     </View>
   );
 }
@@ -24,8 +26,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   message: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
+    ...typography.secondaryMedium,
     marginTop: spacing.md,
     textAlign: 'center',
   },

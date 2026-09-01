@@ -1,21 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { Check } from 'lucide-react-native';
-import { Card } from '../../components/common/Card';
+import { Check, Shield } from 'lucide-react-native';
+import { Button } from '../../components/common/Button';
 import { PaymentVerificationAnimation } from '../../components/motion/PaymentVerificationAnimation';
 import { SlideUpView } from '../../components/motion/SlideUpView';
 import { useOrder } from '../../hooks/useOrder';
 import { RootNavigationProp, RootStackParamList } from '../../navigation/types';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { formatMinorUnits } from '../../utils/currency';
 
 type PaymentPendingRouteProp = RouteProp<RootStackParamList, 'PaymentPending'>;
@@ -26,9 +25,14 @@ export function PaymentPendingScreen() {
   const { orderId, product } = route.params;
 
   const { order, paymentView, refreshPayment } = useOrder(orderId);
-  const [, setPollCount] = useState(0);
+  const [isVerifying, setVerifying] = useState(false);
+  const themeColors = useThemeColors();
+
+  const hasNavigatedRef = React.useRef(false);
 
   const goToSuccess = (paymentId?: string | null) => {
+    if (hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
     navigation.replace('PaymentSuccess', {
       orderId: order?.id || orderId,
       product,
@@ -36,7 +40,16 @@ export function PaymentPendingScreen() {
     });
   };
 
-  // Auto-transition when backend confirms status
+  const goToFailed = () => {
+    if (hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
+    navigation.replace('PaymentFailed', {
+      orderId: order?.id || orderId,
+      product,
+    });
+  };
+
+  // Payment Truth: Only backend verified state triggers navigation
   useEffect(() => {
     if (order) {
       if (order.status === 'PAID') {
@@ -46,47 +59,23 @@ export function PaymentPendingScreen() {
         order.status === 'PAYMENT_EXPIRED' ||
         order.status === 'CANCELLED'
       ) {
-        navigation.replace('PaymentFailed', {
-          orderId: order.id,
-          product,
-          reason: paymentView?.failureReason,
-        });
+        goToFailed();
       }
     }
-  }, [order, navigation, product, paymentView]);
+  }, [order, product]);
 
-  // Test mode auto-advancement: in test mode simulation, complete after 3.5s
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      goToSuccess();
-    }, 3500);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Periodic active refresh polling every 4 seconds up to 25 attempts
-  useEffect(() => {
-    if (
-      order?.status === 'PAID' ||
-      order?.status === 'PAYMENT_FAILED' ||
-      order?.status === 'CANCELLED'
-    ) {
-      return;
+  const handleManualVerify = async () => {
+    setVerifying(true);
+    try {
+      if (orderId) {
+        await refreshPayment(orderId);
+      }
+    } catch {
+      // Backend error or not yet verified
+    } finally {
+      setVerifying(false);
     }
-
-    const interval = setInterval(() => {
-      setPollCount((prev) => {
-        if (prev >= 25) {
-          clearInterval(interval);
-          return prev;
-        }
-        refreshPayment?.(orderId);
-        return prev + 1;
-      });
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [order?.status, refreshPayment]);
+  };
 
   const formattedAmount = order
     ? order.amountFormatted || formatMinorUnits(order.amount, order.currency)
@@ -95,80 +84,100 @@ export function PaymentPendingScreen() {
     : '₹1,499';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Verification Hero Animation */}
-        <PaymentVerificationAnimation
-          amountFormatted={formattedAmount}
-          testMode={true}
-        />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Verification Animation & Headline */}
+        <View style={styles.heroSection}>
+          <PaymentVerificationAnimation amountFormatted={formattedAmount} testMode={true} />
+        </View>
 
-        {/* Verification Steps Timeline Card */}
-        <SlideUpView distance={14} delay={100} duration={motion.duration.normal}>
-          <Card variant="outlined" style={styles.stepsCard}>
-            <Text style={styles.cardTitle}>Payment Verification Timeline</Text>
-
-            <View style={styles.stepRow}>
-              <View style={[styles.stepIcon, styles.stepCompleted]}>
-                <Check size={12} color={colors.textInverse} strokeWidth={3} />
-              </View>
-              <View style={styles.stepTextContainer}>
-                <Text style={styles.stepTitle}>Order created</Text>
-                <Text style={styles.stepDesc}>Inventory reserved & authorization signed</Text>
-              </View>
+        {/* 4-Step Verification Timeline */}
+        <SlideUpView distance={12} duration={240} style={[styles.statusCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <View style={styles.stepItem}>
+            <View style={styles.stepCheck}>
+              <Check size={11} color={colors.success} strokeWidth={3} />
             </View>
-
-            <View style={styles.stepConnector} />
-
-            <View style={styles.stepRow}>
-              <View style={[styles.stepIcon, styles.stepCompleted]}>
-                <Check size={12} color={colors.textInverse} strokeWidth={3} />
-              </View>
-              <View style={styles.stepTextContainer}>
-                <Text style={styles.stepTitle}>Payment initiated</Text>
-                <Text style={styles.stepDesc}>Razorpay checkout session active</Text>
-              </View>
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitle, { color: themeColors.textPrimary }]}>Order created</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textSecondary }]}>Server validated pricing & draft ID</Text>
             </View>
+          </View>
 
-            <View style={styles.stepConnector} />
+          <View style={[styles.stepLine, { backgroundColor: themeColors.borderSubtle }]} />
 
-            <View style={styles.stepRow}>
-              <View style={[styles.stepIcon, styles.stepActive]}>
-                <View style={styles.pulseInnerDot} />
-              </View>
-              <View style={styles.stepTextContainer}>
-                <Text style={[styles.stepTitle, styles.stepTitleActive]}>
-                  Verifying webhook signature
-                </Text>
-                <Text style={styles.stepDesc}>Awaiting Razorpay cryptographic confirmation</Text>
-              </View>
+          <View style={styles.stepItem}>
+            <View style={styles.stepCheck}>
+              <Check size={11} color={colors.success} strokeWidth={3} />
             </View>
-
-            <View style={styles.stepConnectorInactive} />
-
-            <View style={styles.stepRow}>
-              <View style={[styles.stepIcon, styles.stepPending]}>
-                <View style={styles.pendingDot} />
-              </View>
-              <View style={styles.stepTextContainer}>
-                <Text style={[styles.stepTitle, styles.stepTitlePending]}>Order confirmed</Text>
-                <Text style={styles.stepDesc}>Dispatch & receipt generated</Text>
-              </View>
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitle, { color: themeColors.textPrimary }]}>Payment initiated</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textSecondary }]}>Checkout session active on Razorpay sandbox</Text>
             </View>
-          </Card>
+          </View>
+
+          <View style={[styles.stepLine, { backgroundColor: themeColors.borderSubtle }]} />
+
+          <View style={styles.stepItem}>
+            <View style={[styles.stepActiveDotContainer, { backgroundColor: themeColors.primarySubtle }]}>
+              <View style={[styles.stepActiveDot, { backgroundColor: themeColors.primary }]} />
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitleActive, { color: themeColors.primary }]}>Verifying payment</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textSecondary }]}>Listening for backend signature verification</Text>
+            </View>
+          </View>
+
+          <View style={[styles.stepLine, { backgroundColor: themeColors.borderSubtle }]} />
+
+          <View style={styles.stepItem}>
+            <View style={[styles.stepInactiveDot, { backgroundColor: themeColors.borderSubtle }]} />
+            <View style={styles.stepContent}>
+              <Text style={[styles.stepTitleInactive, { color: themeColors.textMuted }]}>Order confirmed</Text>
+              <Text style={[styles.stepDesc, { color: themeColors.textMuted }]}>Pending cryptographic settlement</Text>
+            </View>
+          </View>
         </SlideUpView>
 
-        {/* Test Mode Tap to Complete Helper */}
-        <SlideUpView distance={16} delay={150} duration={motion.duration.normal}>
-          <TouchableOpacity
-            style={styles.instantAdvanceButton}
-            onPress={() => goToSuccess()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.instantAdvanceText}>⚡ Advance to Success (Test Mode)</Text>
-          </TouchableOpacity>
+        {/* Security Invariant Guarantee */}
+        <SlideUpView distance={14} delay={60} duration={240} style={[styles.securityBanner, { backgroundColor: themeColors.primarySubtle }]}>
+          <Shield size={16} color={themeColors.primary} />
+          <Text style={[styles.securityText, { color: themeColors.primary }]}>
+            Never trust client-side assertions. Order status marks PAID exclusively upon HMAC-SHA256 signature verification.
+          </Text>
         </SlideUpView>
       </ScrollView>
+
+      {/* Footer Action Buttons */}
+      <View style={[styles.footer, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+        <Button
+          title="Verify status"
+          variant="primary"
+          size="lg"
+          onPress={handleManualVerify}
+          loading={isVerifying}
+        />
+        {paymentView?.paymentUrl && (
+          <Button
+            title="Reopen Razorpay payment"
+            variant="outline"
+            size="md"
+            onPress={() => {
+              if (paymentView.paymentUrl) {
+                Linking.openURL(paymentView.paymentUrl).catch(() => {});
+              }
+            }}
+          />
+        )}
+        <Button
+          title="Cancel order"
+          variant="outline"
+          size="md"
+          onPress={goToFailed}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -176,108 +185,108 @@ export function PaymentPendingScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.screenHorizontal,
     paddingTop: spacing.xxl,
+    paddingBottom: 130,
     alignItems: 'center',
   },
-  stepsCard: {
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  statusCard: {
     width: '100%',
-    padding: spacing.lg,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    padding: spacing.cardPaddingLarge,
     marginBottom: spacing.lg,
-    backgroundColor: colors.surface,
+    ...shadows.subtle,
   },
-  cardTitle: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-    fontSize: 15,
-    marginBottom: spacing.md,
-  },
-  stepRow: {
+  stepItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  stepIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  stepCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.successBg,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
   },
-  stepCompleted: {
-    backgroundColor: colors.success,
+  stepActiveDotContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  stepActive: {
-    backgroundColor: colors.primarySubtle,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  pulseInnerDot: {
+  stepActiveDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.primary,
   },
-  stepPending: {
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.border,
+  stepInactiveDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
-  pendingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.textTertiary,
+  stepLine: {
+    width: 1.5,
+    height: 18,
+    marginLeft: 9,
+    marginVertical: 2,
   },
-  stepTextContainer: {
+  stepContent: {
+    marginLeft: spacing.md,
     flex: 1,
-    paddingBottom: 4,
   },
   stepTitle: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-    fontSize: 14,
+    ...typography.captionBold,
+    fontSize: 13,
   },
   stepTitleActive: {
-    color: colors.primary,
+    ...typography.captionBold,
+    fontSize: 13,
+    fontWeight: '700',
   },
-  stepTitlePending: {
-    color: colors.textMuted,
+  stepTitleInactive: {
+    ...typography.captionBold,
+    fontSize: 13,
   },
   stepDesc: {
     ...typography.caption,
-    color: colors.textMuted,
+    fontSize: 11,
     marginTop: 1,
-    fontSize: 12,
   },
-  stepConnector: {
-    width: 2,
-    height: 18,
-    backgroundColor: colors.success,
-    marginLeft: 11,
-    marginVertical: 2,
+  securityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.inputs,
+    gap: spacing.sm,
   },
-  stepConnectorInactive: {
-    width: 2,
-    height: 18,
-    backgroundColor: colors.border,
-    marginLeft: 11,
-    marginVertical: 2,
+  securityText: {
+    ...typography.captionMedium,
+    fontSize: 11,
+    flex: 1,
+    lineHeight: 16,
   },
-  instantAdvanceButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: colors.primarySubtle,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.primaryLight,
-  },
-  instantAdvanceText: {
-    ...typography.captionBold,
-    color: colors.primary,
-    fontSize: 12,
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    gap: spacing.xs,
+    ...shadows.card,
   },
 });

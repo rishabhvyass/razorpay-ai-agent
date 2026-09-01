@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import {
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,16 +10,15 @@ import {
   View,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { X } from 'lucide-react-native';
+import { Check, ShieldCheck } from 'lucide-react-native';
+import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
-import { Card } from '../../components/common/Card';
 import { PaymentSuccessAnimation } from '../../components/motion/PaymentSuccessAnimation';
 import { SlideUpView } from '../../components/motion/SlideUpView';
 import { useOrder } from '../../hooks/useOrder';
 import { RootNavigationProp, RootStackParamList } from '../../navigation/types';
 import { useOrderStore } from '../../store/orderStore';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { formatMinorUnits } from '../../utils/currency';
 
 type PaymentSuccessRouteProp = RouteProp<RootStackParamList, 'PaymentSuccess'>;
@@ -31,7 +31,7 @@ export function PaymentSuccessScreen() {
   const { order } = useOrder(orderId);
   const paymentReference = paymentId || order?.razorpayPaymentId || 'pay_QvR9mZ1x';
 
-  // Mark order dynamically as PAID in order store
+  // Ensure store reflects PAID state with reference
   useEffect(() => {
     if (orderId) {
       useOrderStore.getState().updateOrderStatus(orderId, 'PAID', paymentReference);
@@ -60,97 +60,88 @@ export function PaymentSuccessScreen() {
     ? formatMinorUnits(product.price * quantity, product.currency)
     : '₹1,499';
 
-  const imageUrl = product?.imageUrl || 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800';
+  const orderNumber = (order?.id || orderId || 'order_NxK7Pq2d').slice(0, 10);
+  const imageUrl = product?.imageUrl || 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=400';
 
   const handleViewOrder = () => {
     navigation.navigate('OrderDetails', { orderId });
   };
 
   const handleContinueShopping = () => {
-    navigation.navigate('Main', { screen: 'AITab' });
+    navigation.navigate('MainTabs', { screen: 'AITab' });
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerSpacer} />
-        <Text style={styles.headerTitle}>Order Confirmed</Text>
-        <TouchableOpacity
-          onPress={handleContinueShopping}
-          style={styles.closeButton}
-          activeOpacity={0.7}
-        >
-          <X size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
+  const themeColors = useThemeColors();
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Animated Checkmark Hero */}
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Success Animation: Checkmark -> Title -> Amount */}
         <PaymentSuccessAnimation
           amountFormatted={formattedAmount}
-          subtitle="Your payment was verified by Razorpay and your order is confirmed."
+          subtitle="Your order is confirmed."
         />
 
-        {/* Order Details Card */}
-        <SlideUpView distance={14} delay={180} duration={motion.duration.normal}>
-          <Card variant="outlined" style={styles.detailsCard}>
-            <View style={styles.itemRow}>
-              <Image source={{ uri: imageUrl }} style={styles.itemImage} resizeMode="cover" />
-              <View style={styles.itemDetails}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {product?.name || 'Classic Oversized Hoodie'}
-                </Text>
-                <Text style={styles.itemCategory}>
-                  {product?.category || 'Clothing'} · Qty: {quantity}
-                </Text>
-                <Text style={styles.itemPrice}>{formattedAmount}</Text>
-              </View>
+        {/* Order Details Overview */}
+        <SlideUpView distance={14} delay={180} duration={260} style={[styles.detailsCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={[styles.orderLabel, { color: themeColors.textSecondary }]}>Order ID</Text>
+              <Text style={[styles.orderNumber, { color: themeColors.textPrimary }]}>#{orderNumber}</Text>
             </View>
+            <Badge label="PAID" variant="success" size="sm" showDot />
+          </View>
 
-            <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: themeColors.borderSubtle }]} />
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Order ID</Text>
-              <Text style={styles.infoValue}>{orderId.slice(0, 18)}...</Text>
+          {/* Product Row */}
+          <View style={styles.productRow}>
+            <Image source={{ uri: imageUrl }} style={styles.thumbnail} resizeMode="cover" />
+            <View style={styles.productInfo}>
+              <Text style={[styles.productName, { color: themeColors.textPrimary }]} numberOfLines={1}>
+                {product?.name || order?.product?.name || 'Verified Order Item'}
+              </Text>
+              <Text style={[styles.productMeta, { color: themeColors.textSecondary }]}>Qty: {quantity} · {product?.category || 'Standard'}</Text>
+              <Text style={[styles.priceMeta, { color: themeColors.primary }]}>{formattedAmount}</Text>
             </View>
+          </View>
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Payment ID</Text>
-              <Text style={styles.infoValue}>{paymentReference}</Text>
-            </View>
+          <View style={[styles.divider, { backgroundColor: themeColors.borderSubtle }]} />
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Status</Text>
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>PAID</Text>
-              </View>
-            </View>
-          </Card>
-        </SlideUpView>
-
-        {/* Action Buttons */}
-        <SlideUpView distance={18} delay={230} duration={motion.duration.normal}>
-          <View style={styles.buttonGroup}>
-            <Button
-              title="Track Order"
-              variant="primary"
-              size="lg"
-              onPress={handleViewOrder}
-              style={styles.primaryButton}
-            />
-
-            <Button
-              title="Continue Shopping"
-              variant="secondary"
-              size="lg"
-              onPress={handleContinueShopping}
-              style={styles.secondaryButton}
-            />
+          {/* Cryptographic Proof Overview */}
+          <View style={styles.proofRow}>
+            <Text style={[styles.label, { color: themeColors.textSecondary }]}>Razorpay Payment</Text>
+            <Text style={[styles.value, { color: themeColors.textPrimary }]}>{paymentReference}</Text>
           </View>
         </SlideUpView>
+
+        {/* Verified Trust Seal */}
+        <SlideUpView distance={16} delay={240} duration={260} style={[styles.trustBanner, { backgroundColor: themeColors.primarySubtle }]}>
+          <ShieldCheck size={16} color={colors.success} />
+          <Text style={[styles.trustText, { color: themeColors.textSecondary }]}>
+            Cryptographically confirmed by Razorpay webhook signature.
+          </Text>
+        </SlideUpView>
       </ScrollView>
+
+      {/* Action Footer: [View order] [Continue shopping] */}
+      <View style={[styles.footer, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+        <Button
+          title="View order"
+          variant="primary"
+          size="lg"
+          onPress={handleViewOrder}
+        />
+        <Button
+          title="Continue shopping"
+          variant="outline"
+          size="lg"
+          onPress={handleContinueShopping}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -160,113 +151,113 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    height: 56,
+  scrollContent: {
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.xl,
+    paddingBottom: 140,
+    alignItems: 'center',
+  },
+  detailsCard: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPaddingLarge,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.subtle,
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
   },
-  headerSpacer: {
-    width: 32,
-  },
-  headerTitle: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-    fontSize: 16,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
-  },
-  detailsCard: {
-    marginBottom: spacing.xl,
-    padding: spacing.lg,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  itemImage: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSubtle,
-  },
-  itemDetails: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  itemName: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  itemCategory: {
+  orderLabel: {
     ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
+    color: colors.textSecondary,
   },
-  itemPrice: {
+  orderNumber: {
     ...typography.bodyBold,
-    color: colors.primary,
-    marginTop: 4,
+    color: colors.textPrimary,
+    fontSize: 15,
   },
   divider: {
     height: 1,
     backgroundColor: colors.borderSubtle,
     marginVertical: spacing.md,
   },
-  infoRow: {
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSubtle,
+  },
+  productInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  productName: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+  productMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  priceMeta: {
+    ...typography.captionBold,
+    color: colors.textPrimary,
+    marginTop: 2,
+  },
+  proofRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs + 2,
   },
-  infoLabel: {
-    ...typography.caption,
+  label: {
+    ...typography.secondary,
     color: colors.textSecondary,
-    fontSize: 13,
   },
-  infoValue: {
-    ...typography.captionMedium,
+  value: {
+    ...typography.captionBold,
     color: colors.textPrimary,
-    fontSize: 13,
+    fontFamily: 'monospace',
   },
-  statusBadge: {
+  trustBanner: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.successBg,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-    marginRight: 4,
-  },
-  statusText: {
-    ...typography.captionBold,
-    color: colors.success,
-    fontSize: 11,
-  },
-  buttonGroup: {
     gap: spacing.sm,
+    backgroundColor: colors.successBg,
+    borderRadius: radius.inputs,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
   },
-  primaryButton: {
-    marginBottom: spacing.xs,
+  trustText: {
+    ...typography.captionMedium,
+    color: colors.successText,
+    flex: 1,
   },
-  secondaryButton: {},
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 24 : spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.sm,
+    ...shadows.card,
+  },
 });

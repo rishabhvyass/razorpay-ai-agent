@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Image,
   Linking,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,25 +11,15 @@ import {
   View,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import {
-  ArrowLeft,
-  CreditCard,
-  ExternalLink,
-  Lock,
-  Shield,
-  Smartphone,
-  Zap,
-} from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Lock, Shield, Smartphone } from 'lucide-react-native';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
-import { Card } from '../../components/common/Card';
 import { Loading } from '../../components/common/Loading';
 import { SlideUpView } from '../../components/motion/SlideUpView';
 import { useOrder } from '../../hooks/useOrder';
 import { useProduct } from '../../hooks/useProducts';
 import { RootNavigationProp, RootStackParamList } from '../../navigation/types';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { formatMinorUnits } from '../../utils/currency';
 
 type PaymentRouteProp = RouteProp<RootStackParamList, 'Payment'>;
@@ -38,7 +29,8 @@ export function PaymentScreen() {
   const navigation = useNavigation<RootNavigationProp>();
   const { orderId, product: initialProduct, paymentUrl: initialPaymentUrl } = route.params;
 
-  const { order, paymentView, isLoading: isOrderLoading, issuePaymentLink } = useOrder(orderId);
+  const { order, paymentView, isLoading: isOrderLoading, issuePaymentLink, refreshPayment } =
+    useOrder(orderId);
   const { data: fetchedProduct } = useProduct(order?.productId || initialProduct?.id);
   const product = initialProduct || fetchedProduct;
 
@@ -56,7 +48,7 @@ export function PaymentScreen() {
   if (isOrderLoading && !order) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Loading message="Loading checkout..." style={styles.centerLoading} />
+        <Loading message="Preparing secure checkout..." />
       </SafeAreaView>
     );
   }
@@ -86,127 +78,124 @@ export function PaymentScreen() {
             approvalReason: `Customer confirmed checkout payment for ${product?.name ?? 'item'}.`,
           },
         });
-        targetUrl = response.paymentUrl;
-      } catch {
-        // Fallback
+        if (response && response.paymentUrl) {
+          targetUrl = response.paymentUrl;
+        }
+      } catch (err) {
+        console.warn('[PaymentScreen] issuePaymentLink error:', err);
       }
     }
 
-    if (targetUrl) {
+    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
       try {
-        await Linking.openURL(targetUrl);
-      } catch {
-        // Continue to pending screen if linking fails in simulator
+        const supported = await Linking.canOpenURL(targetUrl);
+        if (supported) {
+          await Linking.openURL(targetUrl);
+        }
+      } catch (err) {
+        console.warn('[PaymentScreen] Linking error:', err);
       }
     }
 
-    setTimeout(() => {
-      navigation.navigate('PaymentPending', { orderId, product });
-      setOpeningPayment(false);
-    }, 400);
+    setOpeningPayment(false);
+    navigation.navigate('PaymentPending', {
+      orderId,
+      product,
+    });
   };
 
+  const themeColors = useThemeColors();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
+      {/* Top Header */}
+      <View style={[styles.header, { backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
           activeOpacity={0.7}
+          accessibilityLabel="Go back"
         >
-          <ArrowLeft size={20} color={colors.textPrimary} />
+          <ArrowLeft size={20} color={themeColors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Checkout</Text>
-        <Badge label="Test Mode" variant="testMode" size="sm" />
+        <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Secure Checkout</Text>
+        <Badge label="RAZORPAY TEST MODE" variant="testMode" size="sm" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Total Amount Header Card */}
-        <SlideUpView distance={12} duration={motion.duration.fast}>
-          <Card variant="outlined" style={styles.amountCard}>
-            <Text style={styles.amountLabel}>Total to Pay</Text>
-            <Text style={styles.amountValue}>{formattedAmount}</Text>
-            <Text style={styles.orderRefText}>Ref: {orderReference.slice(0, 16)}...</Text>
-          </Card>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Amount Display Hero */}
+        <SlideUpView distance={10} duration={240} style={[styles.amountDisplay, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <Text style={[styles.amountLabel, { color: themeColors.textSecondary }]}>Amount Due</Text>
+          <Text style={[styles.amountValue, { color: themeColors.primary }]}>{formattedAmount}</Text>
+          <Text style={[styles.orderRefText, { color: themeColors.textMuted }]}>Order #{orderReference.slice(0, 10)}</Text>
         </SlideUpView>
 
-        {/* Product Details Card */}
-        <SlideUpView distance={14} delay={50} duration={motion.duration.normal}>
-          <Card variant="outlined" style={styles.productCard}>
-            <View style={styles.productRow}>
-              <Image source={{ uri: imageUrl }} style={styles.productThumb} resizeMode="cover" />
-              <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>
-                  {product?.name || 'Classic Oversized Hoodie'}
-                </Text>
-                <Text style={styles.productCategory}>
-                  {product?.category || 'Clothing'} · Qty: {quantity}
-                </Text>
-                <Text style={styles.productPrice}>{formattedAmount}</Text>
+        {/* Product Card */}
+        {product && (
+          <SlideUpView distance={12} delay={60} duration={240} style={[styles.itemCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <Image source={{ uri: imageUrl }} style={styles.itemImage} resizeMode="cover" />
+            <View style={styles.itemDetails}>
+              <Text style={[styles.itemCategory, { color: themeColors.primary }]}>{product.category || 'Product'}</Text>
+              <Text style={[styles.itemName, { color: themeColors.textPrimary }]}>{product.name}</Text>
+              <Text style={[styles.itemPrice, { color: themeColors.textSecondary }]}>
+                {formattedAmount} (Qty: {quantity})
+              </Text>
+            </View>
+          </SlideUpView>
+        )}
+
+        {/* Razorpay Test Environment Sandbox Guide */}
+        <SlideUpView distance={14} delay={120} duration={240} style={[styles.testGuideCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <View style={styles.guideHeader}>
+            <Shield size={16} color={themeColors.primary} />
+            <Text style={[styles.guideTitle, { color: themeColors.textPrimary }]}>Razorpay Test Sandbox</Text>
+          </View>
+          <Text style={[styles.guideDesc, { color: themeColors.textSecondary }]}>
+            No real funds will be charged. Use any test method below on the Razorpay gateway:
+          </Text>
+
+          <View style={styles.methodList}>
+            <View style={[styles.methodItem, { backgroundColor: themeColors.backgroundSubtle }]}>
+              <Smartphone size={16} color={themeColors.textSecondary} />
+              <View style={styles.methodTextCol}>
+                <Text style={[styles.methodName, { color: themeColors.textPrimary }]}>UPI / QR Code</Text>
+                <Text style={[styles.methodValue, { color: themeColors.primary }]}>VPA: success@razorpay</Text>
               </View>
             </View>
-          </Card>
-        </SlideUpView>
 
-        {/* Available Razorpay Payment Methods */}
-        <SlideUpView distance={16} delay={90} duration={motion.duration.normal}>
-          <View style={styles.methodsSection}>
-            <Text style={styles.methodsTitle}>Available Razorpay Methods</Text>
-            <View style={styles.methodCard}>
-              <View style={styles.methodIconBadge}>
-                <Smartphone size={18} color={colors.primary} />
-              </View>
-              <View style={styles.methodInfo}>
-                <Text style={styles.methodName}>UPI / QR Code</Text>
-                <Text style={styles.methodSub}>Google Pay, PhonePe, Paytm, BHIM</Text>
-              </View>
-            </View>
-
-            <View style={styles.methodCard}>
-              <View style={styles.methodIconBadge}>
-                <CreditCard size={18} color={colors.primary} />
-              </View>
-              <View style={styles.methodInfo}>
-                <Text style={styles.methodName}>Cards & Netbanking</Text>
-                <Text style={styles.methodSub}>Visa, Mastercard, RuPay, 50+ Banks</Text>
+            <View style={[styles.methodItem, { backgroundColor: themeColors.backgroundSubtle }]}>
+              <CreditCard size={16} color={themeColors.textSecondary} />
+              <View style={styles.methodTextCol}>
+                <Text style={[styles.methodName, { color: themeColors.textPrimary }]}>Test Card</Text>
+                <Text style={[styles.methodValue, { color: themeColors.primary }]}>4111 2222 3333 4444 · Exp: 12/28 · CVV: 123</Text>
               </View>
             </View>
           </View>
         </SlideUpView>
 
-        {/* Action Button */}
-        <SlideUpView distance={20} delay={140} duration={motion.duration.normal}>
-          <View style={styles.buttonContainer}>
-            <Button
-              title={
-                isOpeningPayment
-                  ? 'Opening secure payment...'
-                  : `Pay ${formattedAmount}`
-              }
-              variant="primary"
-              size="lg"
-              loading={isOpeningPayment}
-              onPress={handlePayPress}
-              disabled={isOpeningPayment}
-              leftIcon={
-                !isOpeningPayment ? (
-                  <ExternalLink size={18} color={colors.textInverse} />
-                ) : undefined
-              }
-            />
-          </View>
-        </SlideUpView>
-
-        {/* Razorpay Trust Badge */}
-        <SlideUpView distance={22} delay={180} duration={motion.duration.normal}>
-          <View style={styles.securityFooter}>
-            <Shield size={14} color={colors.primary} style={styles.shieldIcon} />
-            <Text style={styles.securityText}>
-              Secured by Razorpay • Standard 256-bit SSL encryption
-            </Text>
-          </View>
-        </SlideUpView>
+        {/* Security Message */}
+        <View style={[styles.securityBox, { backgroundColor: themeColors.backgroundSubtle, borderColor: themeColors.border }]}>
+          <Lock size={14} color={themeColors.textMuted} />
+          <Text style={[styles.securityText, { color: themeColors.textSecondary }]}>
+            Payment status is verified by Razorpay.
+          </Text>
+        </View>
       </ScrollView>
+
+      {/* Sticky Bottom Payment Button */}
+      <View style={[styles.footer, { backgroundColor: themeColors.surface, borderTopColor: themeColors.border }]}>
+        <Button
+          title={isOpeningPayment ? 'Opening secure payment...' : `Pay ${formattedAmount}`}
+          variant="primary"
+          size="lg"
+          loading={isOpeningPayment}
+          disabled={isOpeningPayment}
+          onPress={handlePayPress}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -216,150 +205,173 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  centerLoading: {
-    flex: 1,
-  },
   header: {
-    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingVertical: spacing.sm + 2,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.border,
   },
   backButton: {
-    padding: spacing.xs,
-    marginLeft: -spacing.xs,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.bodyBold,
+    ...typography.h3,
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '700',
   },
   scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.xl,
+    paddingBottom: 110,
   },
-  amountCard: {
+  amountDisplay: {
     alignItems: 'center',
-    paddingVertical: spacing.xl,
     backgroundColor: colors.surface,
+    borderRadius: radius.largeCards,
+    borderWidth: 1,
     borderColor: colors.border,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.cardPaddingLarge,
     marginBottom: spacing.lg,
+    ...shadows.subtle,
   },
   amountLabel: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.textMuted,
+    ...typography.captionBold,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
   amountValue: {
-    ...typography.h1,
-    fontSize: 32,
+    ...typography.paymentAmount,
     color: colors.textPrimary,
-    fontWeight: '700',
     marginBottom: 4,
   },
   orderRefText: {
     ...typography.caption,
-    fontSize: 11,
-    color: colors.textTertiary,
-  },
-  productCard: {
-    marginBottom: spacing.lg,
-  },
-  productRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  productThumb: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSubtle,
-  },
-  productInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  productName: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  productCategory: {
-    ...typography.caption,
-    fontSize: 12,
     color: colors.textMuted,
-    marginTop: 2,
   },
-  productPrice: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.primary,
-    marginTop: 4,
-  },
-  methodsSection: {
-    marginBottom: spacing.xl,
-  },
-  methodsTitle: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  methodCard: {
+  itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 14,
+    borderRadius: radius.cards,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    marginBottom: 8,
+    padding: spacing.cardPadding,
+    marginBottom: spacing.lg,
+    ...shadows.subtle,
   },
-  methodIconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primarySubtle,
+  itemImage: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSubtle,
+  },
+  itemDetails: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  itemCategory: {
+    ...typography.captionBold,
+    color: colors.aiViolet,
+    fontSize: 10,
+    textTransform: 'uppercase',
+  },
+  itemName: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+    fontSize: 14,
+    marginVertical: 2,
+  },
+  itemPrice: {
+    ...typography.secondaryBold,
+    color: colors.textSecondary,
+  },
+  testGuideCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPaddingLarge,
+    marginBottom: spacing.lg,
+    ...shadows.subtle,
+  },
+  guideHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  methodInfo: {
+  guideTitle: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+  guideDesc: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  methodList: {
+    gap: spacing.sm,
+  },
+  methodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSubtle,
+    padding: spacing.md,
+    borderRadius: radius.inputs,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  methodTextCol: {
     flex: 1,
   },
   methodName: {
-    ...typography.bodyBold,
-    fontSize: 13,
+    ...typography.captionBold,
     color: colors.textPrimary,
-    fontWeight: '600',
   },
-  methodSub: {
+  methodValue: {
     ...typography.caption,
+    color: colors.textSecondary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
+    marginTop: 2,
   },
-  buttonContainer: {
-    marginBottom: spacing.lg,
-  },
-  securityFooter: {
+  securityBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  shieldIcon: {
-    marginRight: 6,
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
   },
   securityText: {
-    ...typography.caption,
+    ...typography.captionMedium,
     color: colors.textMuted,
-    fontSize: 11,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 24 : spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    ...shadows.card,
   },
 });

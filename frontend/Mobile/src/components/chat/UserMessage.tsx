@@ -1,11 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { CheckCheck } from 'lucide-react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { radius, spacing, typography, useThemeColors } from '../../theme';
 import { motion } from '../../theme/motion';
 import { ChatMessage } from '../../types';
 import { useReduceMotion } from '../../hooks/motion/useReduceMotion';
-import { formatTime } from '../../utils/formatting';
 
 interface UserMessageProps {
   message: ChatMessage;
@@ -13,7 +11,7 @@ interface UserMessageProps {
 
 export function UserMessage({ message }: UserMessageProps) {
   const reduceMotion = useReduceMotion();
-  const timeStr = message.createdAt ? formatTime(message.createdAt) : '8:42 PM';
+  const themeColors = useThemeColors();
 
   const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const translateY = useRef(new Animated.Value(reduceMotion ? 0 : 8)).current;
@@ -25,17 +23,21 @@ export function UserMessage({ message }: UserMessageProps) {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: motion.duration.fast,
+        duration: 200,
         easing: motion.easing.easeOut,
         useNativeDriver: true,
       }),
-      Animated.spring(translateY, {
+      Animated.timing(translateY, {
         toValue: 0,
-        ...motion.spring.snappy,
+        duration: 200,
+        easing: motion.easing.easeOut,
+        useNativeDriver: true,
       }),
-      Animated.spring(scale, {
+      Animated.timing(scale, {
         toValue: 1,
-        ...motion.spring.snappy,
+        duration: 200,
+        easing: motion.easing.easeOut,
+        useNativeDriver: true,
       }),
     ]).start();
   }, [opacity, reduceMotion, scale, translateY]);
@@ -50,12 +52,8 @@ export function UserMessage({ message }: UserMessageProps) {
         },
       ]}
     >
-      <View style={styles.bubble}>
+      <View style={[styles.bubble, { backgroundColor: themeColors.primary }]}>
         <Text style={styles.text}>{message.content}</Text>
-        <View style={styles.footerRow}>
-          <Text style={styles.timeText}>{timeStr}</Text>
-          <CheckCheck size={14} color="rgba(255, 255, 255, 0.85)" style={styles.checkIcon} />
-        </View>
       </View>
     </Animated.View>
   );
@@ -64,40 +62,21 @@ export function UserMessage({ message }: UserMessageProps) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'flex-end',
-    marginVertical: spacing.xs + 2,
+    marginVertical: spacing.xs,
+    paddingLeft: 48,
+    width: '100%',
   },
   bubble: {
-    backgroundColor: colors.primary,
+    borderRadius: radius.inputs,
+    borderBottomRightRadius: 4,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    borderRadius: 20,
-    maxWidth: '82%',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingVertical: spacing.md,
+    maxWidth: '80%',
   },
   text: {
     ...typography.body,
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 15,
-    lineHeight: 21,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-  },
-  timeText: {
-    ...typography.caption,
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginRight: 4,
-  },
-  checkIcon: {
-    marginTop: 1,
+    lineHeight: 22,
   },
 });

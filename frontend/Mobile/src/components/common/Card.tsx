@@ -1,46 +1,79 @@
 import React from 'react';
-import { StyleProp, StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
-import { colors, radius, spacing, theme } from '../../theme';
+import { GestureResponderEvent, StyleProp, StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
+import { AnimatedPressable } from '../motion/AnimatedPressable';
+import { radius, shadows, spacing, useThemeColors } from '../../theme';
+import { motion } from '../../theme/motion';
 
 export interface CardProps extends ViewProps {
   children: React.ReactNode;
   variant?: 'default' | 'elevated' | 'outlined' | 'subtle';
   style?: StyleProp<ViewStyle>;
+  onPress?: (event: GestureResponderEvent) => void;
+  pressScale?: number;
+  disabled?: boolean;
 }
 
-export function Card({ children, variant = 'default', style, ...rest }: CardProps) {
+export function Card({
+  children,
+  variant = 'default',
+  style,
+  onPress,
+  pressScale = motion.scale.cardPress,
+  disabled = false,
+  ...rest
+}: CardProps) {
+  const themeColors = useThemeColors();
+
   const getVariantStyle = (): ViewStyle => {
     switch (variant) {
       case 'elevated':
         return {
-          backgroundColor: colors.surface,
-          ...theme.shadows.md,
+          backgroundColor: themeColors.surface,
+          borderWidth: 1,
+          borderColor: themeColors.border,
+          ...shadows.card,
         };
       case 'outlined':
         return {
-          backgroundColor: colors.surface,
+          backgroundColor: themeColors.surface,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: themeColors.border,
         };
       case 'subtle':
         return {
-          backgroundColor: colors.surfaceSubtle,
+          backgroundColor: themeColors.surfaceSubtle,
           borderWidth: 1,
-          borderColor: colors.borderSubtle,
+          borderColor: themeColors.borderSubtle,
         };
       case 'default':
       default:
         return {
-          backgroundColor: colors.surface,
+          backgroundColor: themeColors.surface,
           borderWidth: 1,
-          borderColor: colors.border,
-          ...theme.shadows.sm,
+          borderColor: themeColors.border,
+          ...shadows.subtle,
         };
     }
   };
 
+  const cardStyle = [styles.baseCard, getVariantStyle(), style];
+
+  if (onPress) {
+    return (
+      <AnimatedPressable
+        onPress={onPress}
+        pressScale={pressScale}
+        disabled={disabled}
+        style={cardStyle}
+        {...rest}
+      >
+        {children}
+      </AnimatedPressable>
+    );
+  }
+
   return (
-    <View style={[styles.baseCard, getVariantStyle(), style]} {...rest}>
+    <View style={cardStyle} {...rest}>
       {children}
     </View>
   );
@@ -48,7 +81,7 @@ export function Card({ children, variant = 'default', style, ...rest }: CardProp
 
 const styles = StyleSheet.create({
   baseCard: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
+    borderRadius: radius.xl,
+    padding: spacing.cardPadding,
   },
 });

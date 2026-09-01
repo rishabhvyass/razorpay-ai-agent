@@ -1,47 +1,33 @@
 import React from 'react';
-import {
-  Animated,
-  Pressable,
-  PressableProps,
-  StyleProp,
-  ViewStyle,
-} from 'react-native';
-import { usePressScale } from '../../hooks/motion/usePressScale';
+import { StyleProp, ViewStyle } from 'react-native';
+import { AnimatedPressable, AnimatedPressableProps } from './AnimatedPressable';
 import { motion } from '../../theme/motion';
 
-interface ScalePressableProps extends Omit<PressableProps, 'style'> {
+export interface ScalePressableProps extends Omit<AnimatedPressableProps, 'style' | 'pressScale' | 'children'> {
   children?: React.ReactNode;
   pressedScale?: number;
+  pressScale?: number;
   style?: StyleProp<ViewStyle>;
 }
 
+/**
+ * Reusable ScalePressable component
+ * Standardized on AnimatedPressable with accessibility, spring physics, and reduced-motion support.
+ */
 export function ScalePressable({
   children,
-  pressedScale = motion.scale.cardPress,
+  pressedScale,
+  pressScale = pressedScale ?? motion.scale.cardPress,
   style,
-  onPressIn,
-  onPressOut,
   ...props
 }: ScalePressableProps) {
-  const { animatedStyle, handlePressIn, handlePressOut } = usePressScale({
-    pressedScale,
-  });
-
   return (
-    <Pressable
-      onPressIn={(e) => {
-        handlePressIn();
-        onPressIn?.(e);
-      }}
-      onPressOut={(e) => {
-        handlePressOut();
-        onPressOut?.(e);
-      }}
+    <AnimatedPressable
+      pressScale={pressScale}
+      style={style}
       {...props}
     >
-      <Animated.View style={[animatedStyle, style]}>
-        {children}
-      </Animated.View>
-    </Pressable>
+      {children}
+    </AnimatedPressable>
   );
 }

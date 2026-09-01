@@ -10,21 +10,17 @@ import {
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react-native';
-import { AgentActivityItem } from '../../components/agent/AgentActivityItem';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
-import { Card } from '../../components/common/Card';
 import { ErrorState } from '../../components/common/ErrorState';
 import { Loading } from '../../components/common/Loading';
-import { SlideUpView } from '../../components/motion/SlideUpView';
+import { IconButton, SlideUpView } from '../../components/motion';
 import { OrderTimeline } from '../../components/orders/OrderTimeline';
-import { useOrderActivity } from '../../hooks/useAgentActivity';
 import { useOrder } from '../../hooks/useOrder';
 import { useProduct } from '../../hooks/useProducts';
 import { RootNavigationProp, RootStackParamList } from '../../navigation/types';
 import { useOrderStore } from '../../store/orderStore';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { formatMinorUnits } from '../../utils/currency';
 import { formatDate } from '../../utils/formatting';
 
@@ -35,21 +31,19 @@ export function OrderDetailsScreen() {
   const navigation = useNavigation<RootNavigationProp>();
   const { orderId } = route.params;
 
-  const { order: serverOrder, isLoading, isError, error, refetch, refreshPayment, isRefreshing } =
+  const { order: serverOrder, isLoading, isError, refetch, refreshPayment, isRefreshing } =
     useOrder(orderId);
   const storedOrder = useOrderStore((state) => state.getOrderById(orderId));
 
   const order = serverOrder || storedOrder;
   const { data: product } = useProduct(order?.productId || storedOrder?.productId);
-  const { data: activityData } = useOrderActivity(orderId);
 
-  // Merge status: if marked PAID in local store, reflect PAID
   const effectiveStatus = storedOrder?.status === 'PAID' ? 'PAID' : (order?.status ?? 'PAYMENT_PENDING');
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Loading message="Loading order details..." style={styles.centerLoading} />
+        <Loading message="Loading order details..." />
       </SafeAreaView>
     );
   }
@@ -59,136 +53,122 @@ export function OrderDetailsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ErrorState
           title="Order not found"
-          message={(error as Error)?.message || 'Unable to retrieve order.'}
+          message="Unable to load order records from the server."
           onRetry={refetch}
         />
       </SafeAreaView>
     );
   }
 
+  const quantity = order.quantity ?? 1;
   const formattedAmount = order.amountFormatted || formatMinorUnits(order.amount, order.currency);
-  const isPayable = ['ORDER_CREATED', 'PAYMENT_PENDING', 'PAYMENT_FAILED'].includes(effectiveStatus);
+  const orderDate = formatDate(order.createdAt || new Date().toISOString());
+  const paymentRef = order.razorpayPaymentId || storedOrder?.razorpayPaymentId || 'pay_test_rzp_mock';
+  const razorpayOrderId = order.razorpayOrderId || storedOrder?.razorpayOrderId || 'order_test_rzp';
+
+  const getStatusHeadline = () => {
+    switch (effectiveStatus) {
+      case 'PAID':
+        return 'Order confirmed';
+      case 'PAYMENT_FAILED':
+        return "Payment wasn't completed";
+      case 'CANCELLED':
+        return 'Order cancelled';
+      case 'PAYMENT_PENDING':
+      default:
+        return 'Payment pending verification';
+    }
+  };
+
+  const themeColors = useThemeColors();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
+      <View style={[styles.header, { backgroundColor: themeColors.background, borderBottomColor: themeColors.border }]}>
+        <IconButton
+          size={36}
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ArrowLeft size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order #{order.id.slice(0, 8)}</Text>
-        <Badge label="Test Mode" variant="testMode" size="sm" />
+          <ArrowLeft size={18} color={themeColors.textPrimary} />
+        </IconButton>
+        <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Order details</Text>
+        <IconButton
+          size={36}
+          onPress={() => refreshPayment(orderId)}
+          disabled={isRefreshing}
+          accessibilityLabel="Refresh order status"
+        >
+          <RefreshCw size={16} color={themeColors.textSecondary} />
+        </IconButton>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={() => refreshPayment(orderId)} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => refreshPayment(orderId)}
+            tintColor={themeColors.primary}
+          />
         }
       >
-        {/* Order Overview Card */}
-        <SlideUpView distance={12} duration={motion.duration.fast}>
-          <Card variant="elevated" style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={styles.orderNumberTitle}>Order Reference</Text>
-                <Text style={styles.orderUuidMono}>{order.id}</Text>
-              </View>
-              <Badge label={effectiveStatus.replace(/_/g, ' ')} status={effectiveStatus} size="md" />
+        {/* Large Status Headline Card */}
+        <SlideUpView distance={10} duration={240} style={[styles.statusCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <View style={styles.statusRow}>
+            <View>
+              <Text style={[styles.statusHeadline, { color: themeColors.textPrimary }]}>{getStatusHeadline()}</Text>
+              <Text style={[styles.statusDate, { color: themeColors.textSecondary }]}>{orderDate}</Text>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.productSection}>
-              <Text style={styles.productName}>{product?.name ?? 'Catalog Product'}</Text>
-              <Text style={styles.productQuantity}>Quantity: {order.quantity}</Text>
-              <Text style={styles.productPrice}>{formattedAmount}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* Reference IDs */}
-            <View style={styles.refList}>
-              {order.razorpayOrderId ? (
-                <View style={styles.refRow}>
-                  <Text style={styles.refLabel}>Razorpay Order ID</Text>
-                  <Text style={styles.refValueMono}>{order.razorpayOrderId}</Text>
-                </View>
-              ) : null}
-
-              {order.razorpayPaymentLinkId ? (
-                <View style={styles.refRow}>
-                  <Text style={styles.refLabel}>Payment Link ID</Text>
-                  <Text style={styles.refValueMono}>{order.razorpayPaymentLinkId}</Text>
-                </View>
-              ) : null}
-
-              {storedOrder?.razorpayPaymentId || order.razorpayPaymentId ? (
-                <View style={styles.refRow}>
-                  <Text style={styles.refLabel}>Razorpay Payment ID</Text>
-                  <Text style={styles.refValueMono}>{storedOrder?.razorpayPaymentId || order.razorpayPaymentId}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.refRow}>
-                <Text style={styles.refLabel}>Created At</Text>
-                <Text style={styles.refValue}>{formatDate(order.createdAt)}</Text>
-              </View>
-            </View>
-          </Card>
-        </SlideUpView>
-
-        {/* Timeline Stepper */}
-        <SlideUpView distance={16} delay={70} duration={motion.duration.normal}>
-          <Card variant="outlined" style={styles.timelineCard}>
-            <OrderTimeline status={effectiveStatus} hasPaymentLink={!!order.razorpayPaymentLinkId || true} />
-          </Card>
-        </SlideUpView>
-
-        {/* Audit Trail for this Order */}
-        {activityData?.actions && activityData.actions.length > 0 ? (
-          <SlideUpView distance={18} delay={120} duration={motion.duration.normal}>
-            <View style={styles.auditSection}>
-              <View style={styles.auditHeader}>
-                <ShieldCheck size={18} color={colors.primary} />
-                <Text style={styles.auditTitle}>Order Audit Trail</Text>
-              </View>
-              {activityData.actions.map((act) => (
-                <AgentActivityItem key={act.id} action={act} />
-              ))}
-            </View>
-          </SlideUpView>
-        ) : null}
-
-        {/* Action Buttons */}
-        <SlideUpView distance={20} delay={160} duration={motion.duration.normal}>
-          <View style={styles.actions}>
-            {isPayable ? (
-              <Button
-                title={`Pay ${formattedAmount}`}
-                variant="primary"
-                onPress={() =>
-                  navigation.navigate('Payment', {
-                    orderId: order.id,
-                    product: product || undefined,
-                  })
-                }
-              />
-            ) : null}
-
-            <Button
-              title="Refresh Payment Status"
-              variant="outline"
-              loading={isRefreshing}
-              onPress={() => refreshPayment(orderId)}
-              leftIcon={<RefreshCw size={16} color={colors.primary} />}
-            />
+            <Badge label={effectiveStatus} status={effectiveStatus} size="md" showDot />
           </View>
+
+          <View style={[styles.divider, { backgroundColor: themeColors.borderSubtle }]} />
+
+          <View style={styles.totalRow}>
+            <Text style={[styles.totalLabel, { color: themeColors.textSecondary }]}>Total Amount</Text>
+            <Text style={[styles.totalAmount, { color: themeColors.primary }]}>{formattedAmount}</Text>
+          </View>
+        </SlideUpView>
+
+        {/* Product Summary Card */}
+        <SlideUpView distance={12} delay={60} duration={240} style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <Text style={[styles.cardTitle, { color: themeColors.textPrimary }]}>Item Summary</Text>
+          <View style={styles.itemRow}>
+            <View style={styles.itemInfo}>
+              <Text style={[styles.itemName, { color: themeColors.textPrimary }]}>
+                {product?.name || order.product?.name || 'Verified Product Item'}
+              </Text>
+              <Text style={[styles.itemMeta, { color: themeColors.textSecondary }]}>Quantity: {quantity} · {product?.category || 'Standard'}</Text>
+            </View>
+            <Text style={[styles.itemPrice, { color: themeColors.textPrimary }]}>{formattedAmount}</Text>
+          </View>
+        </SlideUpView>
+
+        {/* Financial & Razorpay IDs Card */}
+        <SlideUpView distance={14} delay={120} duration={240} style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <Text style={[styles.cardTitle, { color: themeColors.textPrimary }]}>Financial References</Text>
+          <View style={styles.refRow}>
+            <Text style={[styles.refLabel, { color: themeColors.textSecondary }]}>Order ID</Text>
+            <Text style={[styles.refValue, { color: themeColors.textPrimary }]}>{order.id}</Text>
+          </View>
+          <View style={[styles.refDivider, { backgroundColor: themeColors.borderSubtle }]} />
+          <View style={styles.refRow}>
+            <Text style={[styles.refLabel, { color: themeColors.textSecondary }]}>Razorpay Order ID</Text>
+            <Text style={[styles.refValue, { color: themeColors.textPrimary }]}>{razorpayOrderId}</Text>
+          </View>
+          <View style={[styles.refDivider, { backgroundColor: themeColors.borderSubtle }]} />
+          <View style={styles.refRow}>
+            <Text style={[styles.refLabel, { color: themeColors.textSecondary }]}>Payment ID</Text>
+            <Text style={[styles.refValue, { color: themeColors.textPrimary }]}>{paymentRef}</Text>
+          </View>
+        </SlideUpView>
+
+        {/* 4-Step Verified Timeline */}
+        <SlideUpView distance={16} delay={180} duration={240}>
+          <OrderTimeline status={effectiveStatus} hasPaymentLink={!!order.razorpayPaymentLinkId} />
         </SlideUpView>
       </ScrollView>
     </SafeAreaView>
@@ -200,48 +180,66 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  centerLoading: {
-    flex: 1,
-  },
   header: {
-    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingVertical: spacing.sm + 2,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   backButton: {
-    padding: spacing.xs,
-    marginLeft: -spacing.xs,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.bodyBold,
+    ...typography.h3,
     color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  refreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.lg,
+    paddingBottom: 40,
   },
-  card: {
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPaddingLarge,
     marginBottom: spacing.lg,
+    ...shadows.subtle,
   },
-  cardHeader: {
+  statusRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
   },
-  orderNumberTitle: {
-    ...typography.captionBold,
-    color: colors.textSecondary,
-  },
-  orderUuidMono: {
-    ...typography.caption,
+  statusHeadline: {
+    ...typography.h2,
     color: colors.textPrimary,
-    fontFamily: 'Courier',
-    fontSize: 12,
+    fontSize: 18,
+  },
+  statusDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   divider: {
@@ -249,61 +247,77 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginVertical: spacing.md,
   },
-  productSection: {
-    gap: spacing.xs,
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  productName: {
-    ...typography.h3,
-    color: colors.textPrimary,
-  },
-  productQuantity: {
-    ...typography.body,
+  totalLabel: {
+    ...typography.bodyMedium,
     color: colors.textSecondary,
   },
-  productPrice: {
-    ...typography.h2,
-    color: colors.primary,
+  totalAmount: {
+    ...typography.price,
+    color: colors.textPrimary,
+    fontSize: 20,
   },
-  refList: {
-    gap: spacing.sm,
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPaddingLarge,
+    marginBottom: spacing.lg,
+    ...shadows.subtle,
+  },
+  cardTitle: {
+    ...typography.h4,
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: spacing.sm + 2,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+  itemMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  itemPrice: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+    marginLeft: spacing.md,
   },
   refRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 4,
   },
   refLabel: {
-    ...typography.caption,
+    ...typography.secondary,
     color: colors.textSecondary,
   },
   refValue: {
-    ...typography.captionMedium,
+    ...typography.captionBold,
     color: colors.textPrimary,
+    fontFamily: 'monospace',
   },
-  refValueMono: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    fontFamily: 'Courier',
-    fontSize: 11,
-  },
-  timelineCard: {
-    marginBottom: spacing.lg,
-  },
-  auditSection: {
-    marginBottom: spacing.lg,
-  },
-  auditHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  auditTitle: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-  },
-  actions: {
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+  refDivider: {
+    height: 1,
+    backgroundColor: colors.borderSubtle,
+    marginVertical: spacing.xs,
   },
 });

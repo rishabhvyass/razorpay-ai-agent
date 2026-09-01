@@ -1,10 +1,10 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { Badge } from '../common/Badge';
-import { ScalePressable } from '../motion/ScalePressable';
-import { colors, radius, spacing, typography } from '../../theme';
-import { motion } from '../../theme/motion';
+import { AnimatedPressable } from '../motion/AnimatedPressable';
+import { FadeInImage } from '../motion/FadeInImage';
+import { colors, radius, shadows, spacing, typography, useThemeColors } from '../../theme';
 import { Order } from '../../types';
 import { formatMinorUnits } from '../../utils/currency';
 
@@ -14,117 +14,124 @@ interface OrderCardProps {
 }
 
 export function OrderCard({ order, onPress }: OrderCardProps) {
+  const themeColors = useThemeColors();
   const formattedAmount = order.amountFormatted || formatMinorUnits(order.amount, order.currency);
   const imageUrl =
     order.product?.imageUrl ||
     'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=400';
 
-  const orderNum = order.id.replace('order_', '').slice(0, 6).toUpperCase();
+  const orderNum = order.id.slice(0, 8);
 
   const formatOrderDate = (isoString?: string) => {
     if (!isoString) return 'Today';
     const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const getStatusInfo = () => {
-    const dateText = formatOrderDate(order.createdAt);
-
     switch (order.status) {
       case 'PAID':
-        return { label: 'PAID', variant: 'success' as const, dateText };
+        return { label: 'PAID', variant: 'success' as const };
       case 'PENDING_CONFIRMATION':
       case 'ORDER_CREATED':
       case 'PAYMENT_PENDING':
-        return { label: 'PENDING', variant: 'warning' as const, dateText };
+        return { label: 'PENDING', variant: 'warning' as const };
       case 'PAYMENT_FAILED':
-        return { label: 'FAILED', variant: 'danger' as const, dateText };
+        return { label: 'FAILED', variant: 'danger' as const };
       case 'CANCELLED':
       case 'PAYMENT_EXPIRED':
       default:
-        return { label: 'CANCELLED', variant: 'neutral' as const, dateText };
+        return { label: 'CANCELLED', variant: 'neutral' as const };
     }
   };
 
   const statusInfo = getStatusInfo();
+  const dateStr = formatOrderDate(order.createdAt);
 
   return (
-    <ScalePressable
-      pressedScale={motion.scale.cardPress}
-      style={styles.card}
+    <AnimatedPressable
+      style={[
+        styles.card,
+        {
+          backgroundColor: themeColors.surface,
+          borderColor: themeColors.border,
+        },
+      ]}
+      pressScale={0.985}
       onPress={onPress}
+      accessibilityLabel={`Order ${orderNum}`}
     >
-      <View style={styles.contentRow}>
-        <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+      <FadeInImage
+        source={{ uri: imageUrl }}
+        style={styles.thumbnail}
+        containerStyle={[styles.thumbnailContainer, { backgroundColor: themeColors.surfaceSubtle }]}
+        resizeMode="cover"
+      />
 
-        <View style={styles.infoContainer}>
-          <View style={styles.topRow}>
-            <Text style={styles.orderNumber}>Order #{orderNum}</Text>
-            <Badge label={statusInfo.label} variant={statusInfo.variant} size="sm" showDot={true} />
-          </View>
-
-          <Text style={styles.productName} numberOfLines={1}>
-            {order.product?.name || 'Classic Oversized Hoodie'}
-          </Text>
-
-          <View style={styles.bottomRow}>
-            <Text style={styles.dateText}>{statusInfo.dateText}</Text>
-            <Text style={styles.amountText}>{formattedAmount}</Text>
-          </View>
+      <View style={styles.content}>
+        <View style={styles.topRow}>
+          <Text style={[styles.orderIdText, { color: themeColors.textSecondary }]}>Order #{orderNum}</Text>
+          <Text style={[styles.dateText, { color: themeColors.textMuted }]}>{dateStr}</Text>
         </View>
 
-        <ChevronRight size={18} color={colors.textTertiary} style={styles.chevron} />
+        <Text style={[styles.productName, { color: themeColors.textPrimary }]} numberOfLines={1}>
+          {order.product?.name || 'Curated Order Item'}
+        </Text>
+
+        <View style={styles.bottomRow}>
+          <Text style={[styles.amountText, { color: themeColors.textPrimary }]}>{formattedAmount}</Text>
+          <Badge label={statusInfo.label} variant={statusInfo.variant} size="sm" showDot />
+        </View>
       </View>
-    </ScalePressable>
+
+      <ChevronRight size={18} color={themeColors.textMuted} />
+    </AnimatedPressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm + 2,
-    shadowColor: colors.shadowColor,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPadding,
+    marginBottom: spacing.sm + 2,
+    ...shadows.subtle,
   },
-  image: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.md,
+  thumbnailContainer: {
+    width: 54,
+    height: 54,
+    borderRadius: radius.inputs,
+  },
+  thumbnail: {
+    width: 54,
+    height: 54,
+    borderRadius: radius.inputs,
     backgroundColor: colors.surfaceSubtle,
   },
-  infoContainer: {
+  content: {
     flex: 1,
-    marginLeft: spacing.md,
+    marginHorizontal: spacing.md,
   },
   topRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 2,
   },
-  orderNumber: {
+  orderIdText: {
     ...typography.captionBold,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+    fontFamily: 'monospace',
     fontSize: 12,
+  },
+  dateText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
   },
   productName: {
     ...typography.bodyBold,
@@ -134,20 +141,13 @@ const styles = StyleSheet.create({
   },
   bottomRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  dateText: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 12,
+    justifyContent: 'space-between',
+    marginTop: 2,
   },
   amountText: {
-    ...typography.bodyBold,
-    color: colors.primary,
+    ...typography.priceSmall,
+    color: colors.textPrimary,
     fontSize: 14,
-  },
-  chevron: {
-    marginLeft: spacing.xs,
   },
 });

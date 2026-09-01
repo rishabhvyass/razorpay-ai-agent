@@ -10,106 +10,96 @@ export interface OrderTimelineProps {
 }
 
 export function OrderTimeline({ status, hasPaymentLink = false }: OrderTimelineProps) {
-  // Determine states for 4 key milestones
-  // 1: Order Created
-  const step1 = true;
-  // 2: Payment Link Issued
-  const step2 = hasPaymentLink || ['PAYMENT_PENDING', 'PAID', 'PAYMENT_FAILED'].includes(status);
-  // 3: Payment Initiated
-  const step3 = ['PAYMENT_PENDING', 'PAID', 'PAYMENT_FAILED'].includes(status);
-  // 4: Verified by Razorpay
-  const step4Paid = status === 'PAID';
-  const step4Failed = ['PAYMENT_FAILED', 'PAYMENT_EXPIRED', 'CANCELLED'].includes(status);
-
-  const renderStepIcon = (isCompleted: boolean, isCurrent: boolean, isFailed?: boolean) => {
-    if (isFailed) {
-      return (
-        <View style={[styles.iconCircle, styles.iconCircleFailed]}>
-          <X size={12} color={colors.textInverse} />
-        </View>
-      );
-    }
-    if (isCompleted) {
-      return (
-        <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
-          <Check size={12} color={colors.textInverse} />
-        </View>
-      );
-    }
-    if (isCurrent) {
-      return (
-        <View style={[styles.iconCircle, styles.iconCircleActive]}>
-          <Clock size={12} color={colors.accent} />
-        </View>
-      );
-    }
-    return <View style={[styles.iconCircle, styles.iconCirclePending]} />;
-  };
+  const isPaid = status === 'PAID';
+  const isFailed = ['PAYMENT_FAILED', 'PAYMENT_EXPIRED', 'CANCELLED'].includes(status);
+  const isPending = ['PAYMENT_PENDING', 'ORDER_CREATED', 'PENDING_CONFIRMATION'].includes(status);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Order Timeline</Text>
+      <Text style={styles.title}>Timeline</Text>
 
-      {/* Step 1 */}
+      {/* 1. Order created */}
       <View style={styles.stepRow}>
         <View style={styles.stepLeft}>
-          {renderStepIcon(true, false)}
-          <View style={[styles.connector, step2 ? styles.connectorActive : styles.connectorPending]} />
+          <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
+            <Check size={11} color={colors.textInverse} strokeWidth={3} />
+          </View>
+          <View style={[styles.connector, styles.connectorActive]} />
         </View>
         <View style={styles.stepContent}>
-          <Text style={styles.stepTitle}>Order Created</Text>
-          <Text style={styles.stepDesc}>Server calculated amount and registered intent</Text>
+          <Text style={styles.stepTitle}>Order created</Text>
+          <Text style={styles.stepDesc}>Server validated pricing and created draft</Text>
         </View>
       </View>
 
-      {/* Step 2 */}
+      {/* 2. Payment initiated */}
       <View style={styles.stepRow}>
         <View style={styles.stepLeft}>
-          {renderStepIcon(step2, !step2 && status === 'ORDER_CREATED')}
-          <View style={[styles.connector, step3 ? styles.connectorActive : styles.connectorPending]} />
-        </View>
-        <View style={styles.stepContent}>
-          <Text style={styles.stepTitle}>Payment Link Generated</Text>
-          <Text style={styles.stepDesc}>Razorpay provider object bound to exact total</Text>
-        </View>
-      </View>
-
-      {/* Step 3 */}
-      <View style={styles.stepRow}>
-        <View style={styles.stepLeft}>
-          {renderStepIcon(step3, status === 'PAYMENT_PENDING')}
+          <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
+            <Check size={11} color={colors.textInverse} strokeWidth={3} />
+          </View>
           <View
             style={[
               styles.connector,
-              step4Paid ? styles.connectorActive : styles.connectorPending,
+              isPaid || isFailed ? styles.connectorActive : styles.connectorPending,
             ]}
           />
         </View>
         <View style={styles.stepContent}>
-          <Text style={styles.stepTitle}>Payment Pending</Text>
-          <Text style={styles.stepDesc}>Awaiting customer checkout completion</Text>
+          <Text style={styles.stepTitle}>Payment initiated</Text>
+          <Text style={styles.stepDesc}>Checkout session active on Razorpay sandbox</Text>
         </View>
       </View>
 
-      {/* Step 4 */}
+      {/* 3. Payment verified */}
       <View style={styles.stepRow}>
         <View style={styles.stepLeft}>
-          {renderStepIcon(step4Paid, false, step4Failed)}
+          {isPaid ? (
+            <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
+              <Check size={11} color={colors.textInverse} strokeWidth={3} />
+            </View>
+          ) : isFailed ? (
+            <View style={[styles.iconCircle, styles.iconCircleFailed]}>
+              <X size={11} color={colors.textInverse} strokeWidth={3} />
+            </View>
+          ) : (
+            <View style={[styles.iconCircle, styles.iconCircleActive]}>
+              <Clock size={11} color={colors.warning} />
+            </View>
+          )}
+          <View style={[styles.connector, isPaid ? styles.connectorActive : styles.connectorPending]} />
         </View>
         <View style={styles.stepContent}>
-          <Text style={[styles.stepTitle, step4Paid && styles.stepTitleSuccess, step4Failed && styles.stepTitleFailed]}>
-            {step4Paid
-              ? 'Payment Verified (PAID)'
-              : step4Failed
-              ? 'Payment Not Completed'
-              : 'Razorpay Verification'}
+          <Text style={[styles.stepTitle, isPaid && styles.stepTitleSuccess, isFailed && styles.stepTitleFailed]}>
+            {isPaid ? 'Payment verified' : isFailed ? 'Payment not verified' : 'Payment pending'}
           </Text>
           <Text style={styles.stepDesc}>
-            {step4Paid
+            {isPaid
               ? 'Settled via verified Razorpay HMAC webhook signature'
-              : step4Failed
-              ? 'Payment attempt failed or was cancelled'
-              : 'Truth belongs to Razorpay webhook / API verification'}
+              : isFailed
+              ? 'No payment confirmation was recorded by Razorpay'
+              : 'Waiting for webhook signature from backend'}
+          </Text>
+        </View>
+      </View>
+
+      {/* 4. Order confirmed */}
+      <View style={styles.stepRow}>
+        <View style={styles.stepLeft}>
+          {isPaid ? (
+            <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
+              <Check size={11} color={colors.textInverse} strokeWidth={3} />
+            </View>
+          ) : (
+            <View style={[styles.iconCircle, styles.iconCirclePending]} />
+          )}
+        </View>
+        <View style={styles.stepContent}>
+          <Text style={[styles.stepTitle, isPaid && styles.stepTitleSuccess, !isPaid && styles.stepTitlePending]}>
+            Order confirmed
+          </Text>
+          <Text style={styles.stepDesc}>
+            {isPaid ? 'Order successfully placed and verified' : 'Pending payment settlement'}
           </Text>
         </View>
       </View>
@@ -119,11 +109,18 @@ export function OrderTimeline({ status, hasPaymentLink = false }: OrderTimelineP
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.cards,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPaddingLarge,
+    marginBottom: spacing.lg,
   },
   title: {
     ...typography.h4,
     color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: spacing.md,
   },
   stepRow: {
@@ -133,7 +130,7 @@ const styles = StyleSheet.create({
   stepLeft: {
     alignItems: 'center',
     width: 28,
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
   iconCircle: {
     width: 22,
@@ -145,22 +142,22 @@ const styles = StyleSheet.create({
   iconCircleSuccess: {
     backgroundColor: colors.success,
   },
+  iconCircleActive: {
+    backgroundColor: colors.warningBg,
+    borderWidth: 1,
+    borderColor: colors.warningBorder,
+  },
   iconCircleFailed: {
     backgroundColor: colors.danger,
   },
-  iconCircleActive: {
-    backgroundColor: colors.accentLight,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-  },
   iconCirclePending: {
     backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.border,
   },
   connector: {
     width: 2,
-    height: 32,
+    height: 24,
     marginVertical: 2,
   },
   connectorActive: {
@@ -171,7 +168,7 @@ const styles = StyleSheet.create({
   },
   stepContent: {
     flex: 1,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm + 4,
   },
   stepTitle: {
     ...typography.bodyBold,
@@ -184,10 +181,14 @@ const styles = StyleSheet.create({
   stepTitleFailed: {
     color: colors.dangerText,
   },
+  stepTitlePending: {
+    color: colors.textMuted,
+    fontWeight: '400',
+  },
   stepDesc: {
     ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
+    fontSize: 12,
+    marginTop: 1,
   },
 });

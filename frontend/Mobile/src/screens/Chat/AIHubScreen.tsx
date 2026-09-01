@@ -25,7 +25,7 @@ import { ScalePressable } from '../../components/motion/ScalePressable';
 import { SlideUpView } from '../../components/motion/SlideUpView';
 import { VoiceSearchModal } from '../../components/chat/VoiceSearchModal';
 import { RootNavigationProp } from '../../navigation/types';
-import { colors, radius, spacing, typography } from '../../theme';
+import { colors, radius, spacing, typography, useThemeColors } from '../../theme';
 import { motion } from '../../theme/motion';
 
 interface PromptItem {
@@ -70,38 +70,42 @@ const POPULAR_REQUESTS: PromptItem[] = [
 export function AIHubScreen() {
   const navigation = useNavigation<RootNavigationProp>();
   const [isVoiceOpen, setVoiceOpen] = useState(false);
+  const themeColors = useThemeColors();
 
   const handleOpenChat = (query?: string) => {
-    navigation.navigate('Chat', { initialQuery: query });
+    (navigation as any).navigate('MainTabs', {
+      screen: 'AITab',
+      params: { initialQuery: query },
+    });
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
       {/* Top Navigation Header */}
-      <View style={styles.header}>
-        <View style={styles.avatarBadge}>
-          <CircleHelp size={18} color={colors.textInverse} strokeWidth={2.4} />
+      <View style={[styles.header, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.borderSubtle }]}>
+        <View style={[styles.avatarBadge, { backgroundColor: themeColors.primary }]}>
+          <CircleHelp size={18} color="#FFFFFF" strokeWidth={2.4} />
         </View>
 
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Checkout Concierge</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Checkout Concierge</Text>
           <View style={styles.statusRow}>
             <View style={styles.onlineDot} />
             <Text style={styles.onlineText}>Online</Text>
-            <Text style={styles.dotSeparator}>•</Text>
-            <View style={styles.testBadge}>
-              <Text style={styles.testBadgeText}>TEST MODE</Text>
+            <Text style={[styles.dotSeparator, { color: themeColors.textMuted }]}>•</Text>
+            <View style={[styles.testBadge, { backgroundColor: themeColors.testModeBg, borderColor: themeColors.testModeBorder }]}>
+              <Text style={[styles.testBadgeText, { color: themeColors.testModeText }]}>TEST MODE</Text>
             </View>
           </View>
         </View>
 
         <TouchableOpacity
-          style={styles.voiceHeaderButton}
+          style={[styles.voiceHeaderButton, { backgroundColor: themeColors.surfaceSubtle }]}
           onPress={() => setVoiceOpen(true)}
           activeOpacity={0.75}
           accessibilityLabel="Open voice search"
         >
-          <Mic size={18} color={colors.primary} />
+          <Mic size={18} color={themeColors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -111,17 +115,17 @@ export function AIHubScreen() {
       >
         {/* Clean Hero Card with AI Glow */}
         <SlideUpView distance={8} duration={motion.duration.fast}>
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
             <View style={styles.avatarGlowContainer}>
-              <PulsingRing size={64} color={colors.primarySubtle} maxScale={1.12}>
-                <View style={styles.heroAvatar}>
-                  <Sparkles size={24} color={colors.textInverse} strokeWidth={2.4} />
+              <PulsingRing size={64} color={themeColors.primarySubtle} maxScale={1.12}>
+                <View style={[styles.heroAvatar, { backgroundColor: themeColors.primary }]}>
+                  <Sparkles size={24} color="#FFFFFF" strokeWidth={2.4} />
                 </View>
               </PulsingRing>
             </View>
 
-            <Text style={styles.heroHeading}>How can I help you today?</Text>
-            <Text style={styles.heroSubheading}>
+            <Text style={[styles.heroHeading, { color: themeColors.textPrimary }]}>How can I help you today?</Text>
+            <Text style={[styles.heroSubheading, { color: themeColors.textSecondary }]}>
               Search products, compare options, and generate secure checkout links.
             </Text>
           </View>
@@ -132,20 +136,20 @@ export function AIHubScreen() {
           <ScalePressable
             pressedScale={motion.scale.buttonPress}
             onPress={() => handleOpenChat()}
-            style={styles.searchBarContainer}
+            style={[styles.searchBarContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
           >
             <TouchableOpacity
-              style={styles.micCircle}
+              style={[styles.micCircle, { backgroundColor: themeColors.surfaceSubtle }]}
               onPress={() => setVoiceOpen(true)}
               activeOpacity={0.7}
             >
-              <Mic size={17} color={colors.primary} />
+              <Mic size={17} color={themeColors.primary} />
             </TouchableOpacity>
 
-            <Text style={styles.searchPlaceholder}>Ask Concierge anything...</Text>
+            <Text style={[styles.searchPlaceholder, { color: themeColors.textMuted }]}>Ask Concierge anything...</Text>
 
-            <View style={styles.sendArrowCircle}>
-              <ArrowRight size={16} color={colors.textInverse} strokeWidth={2.6} />
+            <View style={[styles.sendArrowCircle, { backgroundColor: themeColors.primary }]}>
+              <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.6} />
             </View>
           </ScalePressable>
         </SlideUpView>
@@ -153,8 +157,8 @@ export function AIHubScreen() {
         {/* Popular Requests Section */}
         <SlideUpView distance={14} delay={80} duration={motion.duration.normal}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Popular Requests</Text>
-            <Text style={styles.sectionSubtitle}>Tap any prompt to start chat</Text>
+            <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Popular Requests</Text>
+            <Text style={[styles.sectionSubtitle, { color: themeColors.textSecondary }]}>Tap any prompt to start chat</Text>
           </View>
 
           <View style={styles.requestsList}>
@@ -169,23 +173,23 @@ export function AIHubScreen() {
                 >
                   <ScalePressable
                     pressedScale={motion.scale.cardPress}
-                    style={styles.requestCard}
+                    style={[styles.requestCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
                     onPress={() => handleOpenChat(item.query)}
                   >
-                    <View style={styles.emojiBadge}>
+                    <View style={[styles.emojiBadge, { backgroundColor: themeColors.surfaceSubtle }]}>
                       <Text style={styles.emojiText}>{item.emoji}</Text>
                     </View>
 
                     <View style={styles.cardTextContainer}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>
+                      <Text style={[styles.cardTitle, { color: themeColors.textPrimary }]} numberOfLines={1}>
                         {item.title}
                       </Text>
-                      <Text style={styles.cardSubtitle} numberOfLines={1}>
+                      <Text style={[styles.cardSubtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>
                         {item.subtitle}
                       </Text>
                     </View>
 
-                    <ChevronRight size={18} color={colors.textTertiary} />
+                    <ChevronRight size={18} color={themeColors.textTertiary} />
                   </ScalePressable>
                 </SlideUpView>
               );
@@ -196,31 +200,31 @@ export function AIHubScreen() {
         {/* Features & Guardrails Section */}
         <SlideUpView distance={16} delay={120} duration={motion.duration.normal}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Autonomous Guardrails</Text>
+            <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Autonomous Guardrails</Text>
           </View>
 
           <Card variant="outlined" style={styles.guardrailCard}>
             <View style={styles.guardrailRow}>
-              <View style={styles.guardrailIconBadge}>
-                <Zap size={15} color={colors.primary} />
+              <View style={[styles.guardrailIconBadge, { backgroundColor: themeColors.primarySubtle }]}>
+                <Zap size={15} color={themeColors.primary} />
               </View>
               <View style={styles.guardrailTextContainer}>
-                <Text style={styles.guardrailTitle}>Live Database Catalog</Text>
-                <Text style={styles.guardrailDesc}>
+                <Text style={[styles.guardrailTitle, { color: themeColors.textPrimary }]}>Live Database Catalog</Text>
+                <Text style={[styles.guardrailDesc, { color: themeColors.textSecondary }]}>
                   Queries real-time product stock, prices, and variants.
                 </Text>
               </View>
             </View>
 
-            <View style={styles.guardrailDivider} />
+            <View style={[styles.guardrailDivider, { backgroundColor: themeColors.borderSubtle }]} />
 
             <View style={styles.guardrailRow}>
-              <View style={styles.guardrailIconBadge}>
-                <Shield size={15} color={colors.primary} />
+              <View style={[styles.guardrailIconBadge, { backgroundColor: themeColors.primarySubtle }]}>
+                <Shield size={15} color={themeColors.primary} />
               </View>
               <View style={styles.guardrailTextContainer}>
-                <Text style={styles.guardrailTitle}>Razorpay Money Action Gate</Text>
-                <Text style={styles.guardrailDesc}>
+                <Text style={[styles.guardrailTitle, { color: themeColors.textPrimary }]}>Razorpay Money Action Gate</Text>
+                <Text style={[styles.guardrailDesc, { color: themeColors.textSecondary }]}>
                   No payments are initiated without explicit human approval.
                 </Text>
               </View>
@@ -235,7 +239,7 @@ export function AIHubScreen() {
             variant="primary"
             size="lg"
             onPress={() => handleOpenChat()}
-            leftIcon={<Bot size={18} color={colors.textInverse} />}
+            leftIcon={<Bot size={18} color="#FFFFFF" />}
             style={styles.chatButton}
           />
         </SlideUpView>

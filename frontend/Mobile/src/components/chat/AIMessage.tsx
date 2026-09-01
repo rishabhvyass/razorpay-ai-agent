@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { CircleHelp } from 'lucide-react-native';
-import { colors, radius, spacing, typography } from '../../theme';
+import { Sparkles } from 'lucide-react-native';
+import { colors, radius, spacing, typography, useThemeColors } from '../../theme';
 import { motion } from '../../theme/motion';
 import { ChatMessage, Product } from '../../types';
 import { useReduceMotion } from '../../hooks/motion/useReduceMotion';
@@ -15,6 +15,7 @@ interface AIMessageProps {
 
 export function AIMessage({ message, onBuyProduct, onViewDetails }: AIMessageProps) {
   const reduceMotion = useReduceMotion();
+  const themeColors = useThemeColors();
   const products = message.products || (message.product ? [message.product] : []);
 
   const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
@@ -26,13 +27,15 @@ export function AIMessage({ message, onBuyProduct, onViewDetails }: AIMessagePro
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: motion.duration.normal,
+        duration: 280,
         easing: motion.easing.easeOut,
         useNativeDriver: true,
       }),
-      Animated.spring(translateY, {
+      Animated.timing(translateY, {
         toValue: 0,
-        ...motion.spring.gentle,
+        duration: 280,
+        easing: motion.easing.easeOut,
+        useNativeDriver: true,
       }),
     ]).start();
   }, [opacity, reduceMotion, translateY]);
@@ -48,20 +51,35 @@ export function AIMessage({ message, onBuyProduct, onViewDetails }: AIMessagePro
       ]}
     >
       <View style={styles.messageRow}>
-        <View style={styles.avatar}>
-          <CircleHelp size={14} color={colors.textInverse} strokeWidth={2.5} />
+        <View style={[styles.avatar, { backgroundColor: themeColors.primarySubtle }]}>
+          <Sparkles size={13} color={themeColors.primary} />
         </View>
-        <View style={styles.bubbleContent}>
+
+        <View style={styles.contentContainer}>
           {message.content ? (
-            <Text style={styles.textContent}>{message.content}</Text>
+            <View
+              style={[
+                styles.textWrapper,
+                {
+                  backgroundColor: themeColors.surface,
+                  borderColor: themeColors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.textContent, { color: themeColors.textPrimary }]}>
+                {message.content}
+              </Text>
+            </View>
           ) : null}
 
           {products.length > 0 && (
-            <ProductCarousel
-              products={products}
-              onBuy={onBuyProduct}
-              onView={onViewDetails}
-            />
+            <View style={styles.carouselWrapper}>
+              <ProductCarousel
+                products={products}
+                onBuy={onBuyProduct}
+                onView={onViewDetails}
+              />
+            </View>
           )}
         </View>
       </View>
@@ -82,20 +100,29 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm + 2,
     marginTop: 2,
   },
-  bubbleContent: {
+  contentContainer: {
     flex: 1,
+  },
+  textWrapper: {
+    borderRadius: radius.inputs,
+    borderTopLeftRadius: 4,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    alignSelf: 'flex-start',
+    maxWidth: '90%',
   },
   textContent: {
     ...typography.body,
-    color: colors.textPrimary,
     fontSize: 15,
     lineHeight: 22,
-    marginBottom: spacing.xs,
+  },
+  carouselWrapper: {
+    marginTop: spacing.sm,
   },
 });
