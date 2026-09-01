@@ -22,15 +22,17 @@ export function CheckoutPage() {
 
   return (
     <Page
-      title="Checkout Concierge"
-      description="Conversational shopping with an explicit authorisation step before anything involving money"
+      title="AI Assistant"
+      description="Ask for what you want. Mercora proposes, you approve, Razorpay verifies."
       fill
       actions={
         <>
           {/* Only on this page. The agent's status belongs where the conversation is;
               putting it on the dashboard would show "Ready" beside surfaces that
               never send it a turn. */}
-          <AgentIdentity />
+          <span className="hidden sm:inline-flex">
+            <AgentIdentity />
+          </span>
           {isCompact ? (
             <Button
               size="sm"
@@ -45,7 +47,10 @@ export function CheckoutPage() {
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <div className="border-line bg-surface-subtle px-4 py-2.5 sm:hidden">
+          <AgentIdentity />
+        </div>
         <ChatWindow />
 
         {!isCompact ? (

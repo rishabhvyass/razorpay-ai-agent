@@ -100,6 +100,13 @@ export function useAuditTrail() {
 
   return {
     feed,
+    /**
+     * The order rows behind the scopes above. Returned because a stage of the
+     * execution trace - PAID - is recorded on the order row, not in the action
+     * trail, and this hook has already fetched them. A second `useKnownOrders()`
+     * call in the page would work off the same cache but split the source of truth.
+     */
+    orders: known.orders,
     isPending,
     error,
     sources: {

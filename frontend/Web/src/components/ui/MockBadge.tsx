@@ -33,12 +33,12 @@ export function MockNotice({
   return (
     <div
       className={cn(
-        'rounded-control border-warning-line bg-warning-bg flex items-start gap-2.5 border px-3 py-2.5',
+        'rounded-card bg-warning-bg flex items-start gap-2.5 px-4 py-3',
         className,
       )}
     >
-      <FlaskConical className="text-warning mt-0.5 size-3.5 shrink-0" aria-hidden />
-      <p className="text-muted text-xs leading-relaxed">{children}</p>
+      <FlaskConical className="text-warning mt-0.5 size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+      <p className="text-ink/80 text-[12px] leading-relaxed">{children}</p>
     </div>
   );
 }

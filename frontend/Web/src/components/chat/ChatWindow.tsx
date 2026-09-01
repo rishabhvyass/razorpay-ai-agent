@@ -1,14 +1,34 @@
-import { useEffect, useRef } from 'react';
-import { Sparkles, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef } from 'react';
 import { AGENT_PHASE_LABEL, useCheckoutSession } from '@/hooks/useCheckoutSession';
 import { config } from '@/lib/config';
 import { SUGGESTED_PROMPTS } from '@/types';
-import { Button, MockNotice } from '@/components/ui';
+import { MockNotice } from '@/components/ui';
 import { ChatMessage } from './ChatMessage';
 import { MessageInput } from './MessageInput';
 import { SuggestedPrompt } from './SuggestedPrompt';
 import { ThinkingIndicator } from './ThinkingIndicator';
 
+/** What the agent may do, and the one thing it may not. Spec sections 03 and 41. */
+const BOUNDS = [
+  'Searches the real catalogue',
+  'States the exact total first',
+  'Cannot pay without your approval',
+] as const;
+
+/**
+ * SCREEN 03. The question, then four ways to answer it.
+ *
+ * Set large and left-aligned rather than centred under an icon: this is the first
+ * thing on the hero screen, and a headline is a better invitation than a decorated
+ * empty box. The three bounds underneath are the product's argument stated before the
+ * agent has said anything, so the first thing a new user reads is what it cannot do.
+ *
+ * The two size steps are container queries, not viewport ones. The same component
+ * renders in a 355px drawer and in a 768px column on a 1280px screen, so a `md:`
+ * breakpoint would give the drawer the wide layout - a 38px headline over three lines
+ * and two prompt cards squeezed into one card's width. `@md` asks the only question
+ * that matters here: how much room did my parent give me.
+ */
 function EmptyConversation({
   onSelect,
   disabled,
@@ -17,26 +37,27 @@ function EmptyConversation({
   disabled: boolean;
 }) {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center px-2 py-10 text-center">
-      <span className="bg-accent-50 border-accent-100 mb-4 grid size-11 place-items-center rounded-full border">
-        <Sparkles className="text-accent size-5" aria-hidden />
-      </span>
-      <h2 className="text-ink text-base font-semibold">Your AI shopping assistant</h2>
-      <p className="text-muted mt-1.5 text-[13px] leading-relaxed">
-        Tell me what you&apos;re looking for and I&apos;ll help you find it.
-      </p>
-      <p className="text-faint mt-2 text-[12px] leading-relaxed">
-        I search the real catalogue, and I will always ask before anything involving money.
+    <div className="py-8 md:py-12">
+      <h2 className="text-ink @md:text-[38px] text-[30px] leading-[1.1] font-extrabold tracking-[-0.03em]">
+        What are you looking for?
+      </h2>
+      <p className="text-muted mt-3 max-w-lg text-[14px] leading-relaxed">
+        Describe it the way you would to a shop assistant - a category, a colour, a budget.
+        Mercora searches the catalogue and proposes; you decide.
       </p>
 
-      <div className="mt-6 w-full space-y-2">
+      <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2">
+        {BOUNDS.map((bound) => (
+          <li key={bound} className="text-faint flex items-center gap-2 text-[12px] font-semibold">
+            <span className="bg-brand-blue size-1.5 shrink-0 rounded-full" aria-hidden />
+            {bound}
+          </li>
+        ))}
+      </ul>
+
+      <div className="@md:grid-cols-2 mt-7 grid gap-2.5">
         {SUGGESTED_PROMPTS.map((prompt) => (
-          <SuggestedPrompt
-            key={prompt}
-            prompt={prompt}
-            onSelect={onSelect}
-            disabled={disabled}
-          />
+          <SuggestedPrompt key={prompt} prompt={prompt} onSelect={onSelect} disabled={disabled} />
         ))}
       </div>
     </div>
@@ -52,24 +73,102 @@ function EmptyConversation({
 export function ChatWindow() {
   const session = useCheckoutSession();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const busy = session.isThinking || session.isConfirming;
+
+  /**
+   * Authorisation cards that have already been answered somewhere else.
+   *
+   * The backend emits a `purchase-confirmation` block from a SUCCESSFUL `create_order`
+   * tool call, which means a user who approved in prose ("yes, go ahead") gets the card
+   * and the payment card for the same order in the same turn. Leaving the card's
+   * Approve button live would offer a second, duplicate order for a purchase that is
+   * already waiting to be paid.
+   *
+   * So a confirmation block is treated as settled when a payment block follows it -
+   * later in the same turn, or in any later turn. This reads the transcript the UI has
+   * already been given; it does not decide anything about the order, and the session's
+   * own state still wins where it exists.
+   */
+  const answered = useMemo(() => {
+    const ids = new Set<string>();
+    let paymentSeen = false;
+
+    for (let i = session.turns.length - 1; i >= 0; i -= 1) {
+      const turn = session.turns[i];
+      if (!turn) continue;
+      const blocks = turn.blocks ?? [];
+      for (let j = blocks.length - 1; j >= 0; j -= 1) {
+        const kind = blocks[j]?.kind;
+        if (kind === 'payment' || kind === 'order-confirmation') {
+          paymentSeen = true;
+        } else if (kind === 'purchase-confirmation' && paymentSeen) {
+          ids.add(turn.id);
+        }
+      }
+    }
+
+    return ids;
+  }, [session.turns]);
+
+  /**
+   * Nothing to follow before the first turn.
+   *
+   * Both effects below chase the bottom of the transcript, which is right once there
+   * is a transcript and wrong before there is one: on a surface shorter than the empty
+   * state - the dock drawer - scrolling to the bottom of "What are you looking for?"
+   * opens the panel halfway down its own invitation. `busy` counts as content because
+   * the thinking bubble is the thing being waited for.
+   */
+  const empty = session.turns.length === 0 && !busy;
 
   // `busy`, not `isThinking` alone: the indicator appears for either mutation, and
   // keying the scroll to only one of them left the confirm-flow bubble below the fold.
   useEffect(() => {
+    if (empty) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [session.turns.length, busy]);
+  }, [empty, session.turns.length, busy]);
+
+  /**
+   * Stay at the bottom while the turn is still growing.
+   *
+   * Scrolling once per new turn is not enough: a reply carrying a payment card grows
+   * after it mounts - the product thumbnail loads, the step tracker resolves - and the
+   * one-shot scroll fires against the height the turn had a frame earlier. The card
+   * with the pay button then sits below the fold on the screen the whole flow leads to.
+   *
+   * Only pins when the reader is already near the bottom, so scrolling up to re-read
+   * an earlier turn is not yanked back by the next image that loads.
+   */
+  useEffect(() => {
+    if (empty) return;
+    const viewport = viewportRef.current;
+    const list = listRef.current;
+    if (!viewport || !list) return;
+
+    const observer = new ResizeObserver(() => {
+      const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      if (distance < 260) viewport.scrollTop = viewport.scrollHeight;
+    });
+
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [empty]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
-        <div className="mx-auto w-full max-w-3xl space-y-5">
+      <div
+        ref={viewportRef}
+        className="scrollbar-slim min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6"
+      >
+        <div ref={listRef} className="@container mx-auto w-full max-w-3xl space-y-5">
           {config.useMock && session.turns.length === 0 ? (
             <MockNotice>
-              <code>POST /api/chat</code> is not implemented on the backend yet, so replies come
-              from a local keyword agent labelled <strong>Simulated</strong>. Product data and order
-              creation are real backend calls.
+              <code>POST /api/chat</code> is running in local mode, so replies come from a keyword
+              agent labelled <strong>Simulated</strong>. Product data and order creation are real
+              backend calls.
             </MockNotice>
           ) : null}
 
@@ -80,7 +179,10 @@ export function ChatWindow() {
               <ChatMessage
                 key={turn.id}
                 turn={turn}
-                confirmationState={session.confirmations[turn.id]}
+                confirmationState={
+                  session.confirmations[turn.id] ??
+                  (answered.has(turn.id) ? 'confirmed' : undefined)
+                }
                 onConfirm={session.confirmPurchase}
                 onDecline={session.declinePurchase}
                 // Intent goes back through the agent, which replies with the
@@ -111,20 +213,6 @@ export function ChatWindow() {
           <div ref={bottomRef} className="h-px" />
         </div>
       </div>
-
-      {session.turns.length > 0 ? (
-        <div className="border-line flex justify-end border-t px-4 py-1.5 md:px-6">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={session.reset}
-            disabled={busy}
-            icon={<Trash2 className="size-3.5" aria-hidden />}
-          >
-            New conversation
-          </Button>
-        </div>
-      ) : null}
 
       <MessageInput onSend={session.send} disabled={busy} autoFocus />
     </div>

@@ -176,8 +176,14 @@ export function ConversionFunnel({
             </div>
 
             <div className="bg-surface-sunken mt-1.5 h-2 overflow-hidden rounded-full">
+              {/*
+                Width, on the large token: this bar is the one thing on the dashboard
+                whose length carries a figure, so it moves when the figure changes and
+                is otherwise still. `transition-all` was also animating the tone colour
+                over half a second, which is longer than any token in the system.
+              */}
               <div
-                className={cn('h-full rounded-full transition-all duration-500', stage.tone)}
+                className={cn('motion-large h-full rounded-full transition-[width]', stage.tone)}
                 style={{ width: `${widthPercent}%` }}
                 role="presentation"
               />

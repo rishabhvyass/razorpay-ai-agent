@@ -89,7 +89,6 @@ export function OrderIdentifiers({ order }: { order: Order }) {
     <dl className="space-y-2">
       <CopyableId label="Order ID" value={order.id} />
       <CopyableId label="Razorpay order" value={order.razorpayOrderId} />
-      <CopyableId label="Payment link" value={order.razorpayPaymentLinkId} />
       <CopyableId label="Payment ID" value={order.razorpayPaymentId} />
       <div className="flex items-baseline justify-between gap-3">
         <dt className="text-muted text-[12px]">Created</dt>

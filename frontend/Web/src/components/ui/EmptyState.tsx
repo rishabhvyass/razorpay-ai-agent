@@ -26,15 +26,17 @@ export function EmptyState({
       )}
     >
       {icon ? (
-        <div className="bg-surface-sunken text-faint mb-4 grid size-11 place-items-center rounded-full">
+        // A square block, not a circle: the empty state uses the same geometry as
+        // every other container in the system.
+        <div className="bg-surface-sunken text-muted mb-5 grid size-12 place-items-center rounded-card">
           {icon}
         </div>
       ) : null}
-      <p className="text-ink text-sm font-semibold">{title}</p>
+      <p className="text-ink text-[16px] font-bold">{title}</p>
       {description ? (
-        <p className="text-muted mt-1.5 max-w-sm text-[13px] leading-relaxed">{description}</p>
+        <p className="text-muted mt-2 max-w-sm text-[13px] leading-relaxed">{description}</p>
       ) : null}
-      {action ? <div className="mt-5">{action}</div> : null}
+      {action ? <div className="mt-6">{action}</div> : null}
     </div>
   );
 }

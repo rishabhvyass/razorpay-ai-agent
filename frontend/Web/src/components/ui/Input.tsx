@@ -41,9 +41,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div
       className={cn(
-        'bg-surface rounded-control flex h-10 items-center gap-2 border px-3 transition-colors',
-        'focus-within:border-accent-300 focus-within:ring-accent-100 focus-within:ring-2',
-        invalid ? 'border-danger-line' : 'border-line-strong',
+        // A bordered box, not an underline: the field's edges are part of the
+        // geometric composition, and a box is the shape a mobile keyboard user can
+        // actually see the extent of.
+        'border-line bg-surface flex h-11 items-center gap-2 rounded-control border px-3',
+        // Spec section 48: the border colour is the whole focus treatment, on the
+        // fast token because it is feedback on a keystroke. No glow, no ring that
+        // grows, and no shadow - the token layer resolves those to nothing anyway.
+        'motion-fast transition-[border-color,background-color]',
+        'focus-within:border-brand-blue',
+        invalid && 'border-danger',
         className,
       )}
     >
@@ -52,9 +59,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         ref={ref}
         aria-invalid={invalid || undefined}
         aria-describedby={describedByIds || undefined}
-        // The ring lives on the wrapper, so the inner element drops its own -
-        // otherwise focus draws two rings a few pixels apart.
-        className="text-ink placeholder:text-faint min-w-0 flex-1 bg-transparent text-sm outline-none focus-visible:outline-none"
+        // The focus treatment lives on the wrapper, so the inner element drops its
+        // own — otherwise focus draws two rings a few pixels apart.
+        className="text-ink placeholder:text-faint min-w-0 flex-1 bg-transparent text-[14px] outline-none focus-visible:outline-none"
         {...rest}
       />
       {trailing ? <span className="text-faint shrink-0">{trailing}</span> : null}
@@ -98,7 +105,7 @@ export function Field({
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="text-ink block text-[13px] font-medium">
+      <label htmlFor={htmlFor} className="text-ink block text-[13px] font-semibold">
         {label}
       </label>
       {/* The id is offered only while there is a hint carrying it - a describedby

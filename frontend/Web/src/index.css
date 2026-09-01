@@ -1,149 +1,159 @@
 @import 'tailwindcss';
 
-/* ---------------------------------------------------------------------------
-   Checkout Concierge — Public Website Design System Tokens
-   White & Blue Fintech Visual Palette & Strict Design Hierarchy
+/*
+  MERCORA design tokens — the only place colour, type, radius and motion are defined.
 
-   Primary Blue:        #0C66E4
-   Deep Cobalt:         #0047B3
-   Electric Blue:       #2563EB
-   Sky / Soft Blue:     #EBF3FF
-   Light Ice Blue:      #F0F6FE
-   Canvas Slate:        #F8FAFC
-   Surface Pure White:  #FFFFFF
-   Primary Text:        #0F172A
-   Secondary Text:      #475569
-   Muted Text:          #94A3B8
-   Border:              #E2E8F0
-   Success:             #16A34A
-   Warning:             #D97706
-   Error:               #DC2626
-   --------------------------------------------------------------------------- */
+  Flat, bold, geometric, digital-native. Every value below is consumed through a
+  Tailwind utility (`bg-canvas`, `text-ink`, `border-line`, `rounded-card`), so no
+  component hard-codes a hex. Two consequences that matter:
+
+    1. Depth is removed at the token layer. The `--shadow-*` tokens resolve to
+       `none`, so any surviving `shadow-card` / `hover:shadow-subtle` utility in the
+       codebase is inert rather than a stray floating card. Hierarchy is carried by
+       size, spacing, typography, colour blocking and 1px lines.
+    2. Dark mode is a re-declaration of the same variable names under `.dark`, so a
+       component written once is correct in both themes.
+*/
 @theme {
-  /* Surfaces */
   --color-canvas: var(--color-canvas);
   --color-surface: var(--color-surface);
   --color-surface-subtle: var(--color-surface-subtle);
   --color-surface-sunken: var(--color-surface-sunken);
   --color-ice-blue: var(--color-ice-blue);
 
-  /* Typography Colors */
   --color-ink: var(--color-ink);
   --color-muted: var(--color-muted);
   --color-faint: var(--color-faint);
-
-  /* Lines & Borders */
   --color-line: var(--color-line);
   --color-line-strong: var(--color-line-strong);
 
-  /* Blue Brand Accents */
   --color-brand-blue: var(--color-brand-blue);
   --color-brand-blue-deep: var(--color-brand-blue-deep);
   --color-brand-blue-light: var(--color-brand-blue-light);
   --color-brand-blue-subtle: var(--color-brand-blue-subtle);
+  --color-accent: var(--color-brand-blue);
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-200: var(--color-accent-200);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-700: var(--color-brand-blue-deep);
+  --color-accent-900: var(--color-accent-900);
 
-  /* Status Colors */
   --color-success: var(--color-success);
   --color-success-bg: var(--color-success-bg);
   --color-success-line: var(--color-success-line);
-
   --color-warning: var(--color-warning);
   --color-warning-bg: var(--color-warning-bg);
   --color-warning-line: var(--color-warning-line);
-
   --color-danger: var(--color-danger);
   --color-danger-bg: var(--color-danger-bg);
   --color-danger-line: var(--color-danger-line);
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+  --color-info-line: var(--color-info-line);
+  --color-razorpay: var(--color-razorpay);
 
-  /* Standard Accent Mappings */
-  --color-accent: var(--color-brand-blue);
-  --color-accent-700: var(--color-brand-blue-deep);
-  --color-accent-50: var(--color-ice-blue);
+  /* One typeface. Outfit is geometric and digital-native; the fallback stack keeps
+     the same grotesque proportions if the webfont never arrives. */
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Outfit', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 
-  /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  /* 8px for blocks, 6px for controls. Nothing in the system is a pill except
+     tags, filters and status badges, which use `rounded-full` explicitly. */
+  --radius-card: 8px;
+  --radius-control: 6px;
 
-  /* Corner Radii */
-  --radius-card: 1rem;
-  --radius-control: 0.625rem;
-
-  /* Shadows */
-  --shadow-subtle: 0 1px 2px 0 rgb(15 23 42 / 0.04);
-  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 6px 16px -2px rgb(15 23 42 / 0.04);
-  --shadow-lifted: 0 10px 28px -4px rgb(15 23 42 / 0.08), 0 2px 6px -1px rgb(15 23 42 / 0.03);
-  --shadow-blue-cta: 0 4px 14px -1px rgba(12, 102, 228, 0.35);
+  /* Deliberately none. See the note at the top of this file. */
+  --shadow-subtle: none;
+  --shadow-card: none;
+  --shadow-lifted: none;
+  --shadow-blue-cta: none;
 }
 
 :root {
-  /* Light Theme (White & Blue Palette) */
-  --color-canvas: #F8FAFC;
-  --color-surface: #FFFFFF;
-  --color-surface-subtle: #F1F5F9;
-  --color-surface-sunken: #E2E8F0;
-  --color-ice-blue: #EBF3FF;
+  --color-canvas: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f9fafb;
+  --color-surface-sunken: #f3f4f6;
+  --color-ice-blue: #eff6ff;
 
-  --color-ink: #0F172A;
-  --color-muted: #475569;
-  --color-faint: #94A3B8;
+  --color-ink: #111827;
+  --color-muted: #6b7280;
+  --color-faint: #9ca3af;
+  --color-line: #e5e7eb;
+  --color-line-strong: #d1d5db;
 
-  --color-line: #E2E8F0;
-  --color-line-strong: #CBD5E1;
+  --color-brand-blue: #3b82f6;
+  --color-brand-blue-deep: #2563eb;
+  --color-brand-blue-light: #60a5fa;
+  --color-brand-blue-subtle: #eff6ff;
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-900: #1e3a8a;
 
-  --color-brand-blue: #0C66E4;
-  --color-brand-blue-deep: #0047B3;
-  --color-brand-blue-light: #388BFF;
-  --color-brand-blue-subtle: #EBF3FF;
-
-  --color-success: #16A34A;
-  --color-success-bg: #F0FDF4;
-  --color-success-line: #BBF7D0;
-
-  --color-warning: #D97706;
-  --color-warning-bg: #FFFBEB;
-  --color-warning-line: #FDE68A;
-
-  --color-danger: #DC2626;
-  --color-danger-bg: #FEF2F2;
-  --color-danger-line: #FECACA;
+  /* Emerald is reserved for verified outcomes. Nothing optimistic wears it. */
+  --color-success: #10b981;
+  --color-success-bg: #ecfdf5;
+  --color-success-line: #a7f3d0;
+  /* Amber marks test mode and money actions awaiting a human. */
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-warning-line: #fde68a;
+  --color-danger: #ef4444;
+  --color-danger-bg: #fef2f2;
+  --color-danger-line: #fecaca;
+  --color-info: #3b82f6;
+  --color-info-bg: #eff6ff;
+  --color-info-line: #bfdbfe;
+  --color-razorpay: #f59e0b;
 }
 
-.dark, [data-theme="dark"] {
-  /* Dark Theme */
-  --color-canvas: #090D16;
-  --color-surface: #0F172A;
-  --color-surface-subtle: #1E293B;
-  --color-surface-sunken: #0A0F1D;
-  --color-ice-blue: #0C2147;
+/*
+  Dark theme. Same names, different values — and the same rule about emerald: it
+  still only appears on a verified payment.
+*/
+.dark,
+[data-theme='dark'] {
+  --color-canvas: #0b1120;
+  --color-surface: #111827;
+  --color-surface-subtle: #1a2333;
+  --color-surface-sunken: #1f2937;
+  --color-ice-blue: #17233b;
 
-  --color-ink: #F8FAFC;
-  --color-muted: #94A3B8;
-  --color-faint: #64748B;
+  --color-ink: #f9fafb;
+  --color-muted: #9ca3af;
+  --color-faint: #6b7280;
+  --color-line: #1f2937;
+  --color-line-strong: #374151;
 
-  --color-line: #1E293B;
-  --color-line-strong: #334155;
+  --color-brand-blue: #60a5fa;
+  --color-brand-blue-deep: #93c5fd;
+  --color-brand-blue-light: #93c5fd;
+  --color-brand-blue-subtle: #17233b;
+  --color-accent-50: #17233b;
+  --color-accent-100: #1e3a8a;
+  --color-accent-200: #1d4ed8;
+  --color-accent-300: #2563eb;
+  --color-accent-900: #dbeafe;
 
-  --color-brand-blue: #388BFF;
-  --color-brand-blue-deep: #0C66E4;
-  --color-brand-blue-light: #66A3FF;
-  --color-brand-blue-subtle: #0C2147;
-
-  --color-success: #4ADE80;
-  --color-success-bg: #052E16;
-  --color-success-line: #14532D;
-
-  --color-warning: #FBBF24;
-  --color-warning-bg: #451A03;
-  --color-warning-line: #78350F;
-
-  --color-danger: #F87171;
-  --color-danger-bg: #450A0A;
-  --color-danger-line: #7F1D1D;
+  --color-success: #34d399;
+  --color-success-bg: #062e22;
+  --color-success-line: #065f46;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #3a2606;
+  --color-warning-line: #92400e;
+  --color-danger: #f87171;
+  --color-danger-bg: #3f1212;
+  --color-danger-line: #991b1b;
+  --color-info: #60a5fa;
+  --color-info-bg: #17233b;
+  --color-info-line: #1e40af;
+  --color-razorpay: #fbbf24;
 }
 
-/* ---------------------------------------------------------------------------
-   Base Rules
-   --------------------------------------------------------------------------- */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -151,43 +161,505 @@
   }
 
   body {
-    background-color: var(--color-canvas);
+    background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.011em;
   }
 
+  /* Headings are bold and tight. The negative tracking is what makes Outfit read
+     as a product typeface rather than a rounded geometric display face. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  /* A 2px solid ring, offset so it never sits on top of the control's own border.
+     Visible on every theme because it uses the brand colour, not a neutral. */
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
     outline: 2px solid var(--color-brand-blue);
     outline-offset: 2px;
   }
 
   ::selection {
-    background-color: var(--color-ice-blue);
-    color: var(--color-brand-blue-deep);
+    background: var(--color-accent-100);
+    color: var(--color-ink);
+  }
+
+  ::placeholder {
+    color: var(--color-faint);
+    opacity: 1;
   }
 }
 
 @layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* Amounts, counts and ids line up column-to-column. Applied to every figure that
+     sits above or below another figure. */
   .nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Kept as no-ops so that any elevation utility left in the codebase resolves to
+     flat rather than reintroducing a floating card. Do not add new call sites. */
+  .shadow-neu,
+  .shadow-neu-hover,
+  .shadow-neu-small,
+  .shadow-neu-inset,
+  .shadow-editorial-cta,
+  .shadow-editorial-lifted {
+    box-shadow: none;
+  }
+
+  /* The one exception: a 2px inset rule under an active tab. It is a line, not a
+     shadow — the same thing a border-bottom would do, without shifting layout. */
+  .shadow-neu-deep {
+    box-shadow: inset 0 -2px 0 var(--color-brand-blue);
   }
 
   .scrollbar-slim {
     scrollbar-width: thin;
     scrollbar-color: var(--color-line-strong) transparent;
   }
+
   .scrollbar-slim::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
+
   .scrollbar-slim::-webkit-scrollbar-thumb {
-    background-color: var(--color-line-strong);
-    border-radius: 9999px;
+    background: var(--color-line-strong);
+    border-radius: 999px;
   }
+
   .scrollbar-slim::-webkit-scrollbar-track {
     background: transparent;
+  }
+}
+
+/*
+  MOTION TOKENS — the only place a duration or an easing curve is written down.
+
+  Four durations, three curves. Every transition and every keyframe below resolves
+  to one of these names, and so does every `transition-*` utility in a component, so
+  retiming the app is an edit here rather than a search for milliseconds.
+
+    fast    colour, opacity, hover feedback — felt, not watched
+    micro   small transforms: menus, tooltips, chips, checkmarks
+    normal  panels, message turns, drawers, page entrances
+    large   layout: the rail, bottom sheets, anything that moves other things
+
+  Curves: entering decelerates (ease-enter), leaving accelerates (ease-exit),
+  something that both arrives and departs does neither (ease-layout). Only opacity
+  and transform animate. No bounce, no spring, no overshoot, no parallax, and
+  nothing that pretends to visualise the model "thinking" beyond a plain three-dot
+  indicator tied to real request state.
+
+  `static` because these are consumed by hand-written CSS in this file as well as by
+  utilities, and an unused-looking token that gets dropped from the output would
+  silently fall back to an unset custom property — i.e. no transition at all.
+*/
+@theme static {
+  --duration-fast: 140ms;
+  --duration-micro: 190ms;
+  --duration-normal: 260ms;
+  --duration-large: 320ms;
+
+  /*
+    Tailwind's own fallback, pointed at the same tokens. A bare `transition-colors`
+    with no `motion-*` beside it would otherwise resolve to Tailwind's stock 150ms and
+    `cubic-bezier(0.4, 0, 0.2, 1)` - close enough to look right and still a second
+    source of timing, which is the thing section 39 asks not to have. Redirecting the
+    default means the couple of dozen colour-only hovers across the app are on the fast
+    token by construction rather than by a call site remembering to say so.
+  */
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--ease-layout);
+
+  /* One step for every staggered list in the app. 50ms sits inside both ranges the
+     spec asks for (40-60ms for cards, 40-80ms for a grid) and the total is capped
+     below, so a long list does not turn into a queue. */
+  --stagger-step: 50ms;
+
+  --ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-layout: cubic-bezier(0.4, 0, 0.2, 1);
+  /* The original name for the entering curve, kept so existing call sites hold. */
+  --ease-editorial: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+  Duration and curve in one class, so a call site cannot take its timing from this
+  system and its easing from nowhere. What moves stays at the call site - that is a
+  per-component decision - but how long it takes is not.
+*/
+@utility motion-fast {
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-layout);
+}
+@utility motion-micro {
+  transition-duration: var(--duration-micro);
+  transition-timing-function: var(--ease-enter);
+}
+@utility motion-normal {
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--ease-enter);
+}
+@utility motion-large {
+  transition-duration: var(--duration-large);
+  transition-timing-function: var(--ease-layout);
+}
+@utility motion-exit {
+  transition-duration: var(--duration-micro);
+  transition-timing-function: var(--ease-exit);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Exits. Same distances, reversed, on the faster accelerating curve: a panel that
+   leaves as slowly as it arrived reads as lag rather than as an answer. */
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes scale-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+@keyframes slide-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slide-out-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes slide-out-bottom {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* A dialog arrives from almost its own size. 0.98 is deliberately close to 1: the
+   panel should look like it was already there, not like it flew in. */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Log rows arrive from the left, along the rail they hang off. */
+@keyframes enter-x {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* No overshoot: the check scales up to exactly 1 and stops. */
+@keyframes check-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The tick draws itself along its own stroke. Length 26 covers lucide's Check path
+   in a 24-unit viewBox with room to spare; overshooting the dash length only means
+   the line starts fully hidden, which is what we want. */
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 26;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes thinking {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/*
+  Entrances. Every one of these accepts an optional `--stagger` index (set inline
+  from a list index) and delays itself by that many steps, capped at 300ms so the
+  twentieth row of a long list is not still waiting to appear. One mechanism, so no
+  component has to know a millisecond value to join a sequence.
+*/
+.animate-fade-in,
+.animate-fade-up,
+.animate-scale-in,
+.animate-enter-x,
+.animate-check-pop {
+  animation-delay: min(calc(var(--stagger, 0) * var(--stagger-step)), 300ms);
+}
+
+.animate-fade-in {
+  animation-name: fade-in;
+  animation-duration: var(--duration-micro);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+}
+.animate-fade-up {
+  animation-name: fade-up;
+  animation-duration: var(--duration-normal);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+}
+.animate-scale-in {
+  animation-name: scale-in;
+  animation-duration: var(--duration-normal);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+}
+.animate-enter-x {
+  animation-name: enter-x;
+  animation-duration: var(--duration-normal);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right var(--duration-normal) var(--ease-enter) both;
+}
+.animate-slide-in-left {
+  animation: slide-in-left var(--duration-normal) var(--ease-enter) both;
+}
+.animate-slide-in-bottom {
+  animation: slide-in-bottom var(--duration-large) var(--ease-enter) both;
+}
+/* Longhand rather than the `animation:` shorthand, because the shorthand resets
+   `animation-delay` and this one participates in the stagger block above. */
+.animate-check-pop {
+  animation-name: check-pop;
+  animation-duration: var(--duration-micro);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+}
+
+/* Exits, on the leaving curve. Used by whatever holds a closing element on screen
+   long enough to play them - `Modal` does this with a timer keyed to the same
+   token, so the CSS and the unmount cannot drift apart. */
+.animate-fade-out {
+  animation: fade-out var(--duration-micro) var(--ease-exit) both;
+}
+.animate-scale-out {
+  animation: scale-out var(--duration-micro) var(--ease-exit) both;
+}
+.animate-slide-out-right {
+  animation: slide-out-right var(--duration-micro) var(--ease-exit) both;
+}
+.animate-slide-out-left {
+  animation: slide-out-left var(--duration-micro) var(--ease-exit) both;
+}
+.animate-slide-out-bottom {
+  animation: slide-out-bottom var(--duration-micro) var(--ease-exit) both;
+}
+
+/*
+  A route change (spec section 8). The same 8px rise as a card or a message turn, on the
+  micro duration rather than the normal one: a page is the largest thing on screen that
+  moves, and the reader asked for it, so it has to be settled before they look for what
+  they navigated to. Opacity and transform only - nothing about the layout is animated,
+  so the incoming page does not push the top bar around while it arrives.
+*/
+.animate-page {
+  animation-name: fade-up;
+  animation-duration: var(--duration-micro);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+}
+
+/*
+  A turn the reader typed themselves is already theirs, so it lands on the micro
+  duration and reads as immediate; a turn from the agent takes the normal one and reads
+  as having arrived from somewhere (spec section 11). Same 8px, same curve - timing is
+  the only difference, and it is the one that makes the conversation feel like two
+  participants rather than one list.
+
+  Declared after `.animate-fade-up` so it wins on source order: `cn` concatenates class
+  names without resolving conflicts, so the cascade is what decides this.
+*/
+.animate-turn-own {
+  animation-duration: var(--duration-micro);
+}
+
+/*
+  The dialog pair. A centred dialog is a bottom sheet below 640px and a panel above
+  it, and the two want different motion: a sheet slides up from the edge it is pinned
+  to, a panel appears at almost its own size where it already is. The breakpoint
+  belongs here rather than in the component, which should only have to say "opening"
+  or "closing".
+*/
+.animate-dialog-in {
+  animation: slide-in-bottom var(--duration-large) var(--ease-enter) both;
+}
+.animate-dialog-out {
+  animation: slide-out-bottom var(--duration-micro) var(--ease-exit) both;
+}
+
+@media (width >= 40rem) {
+  .animate-dialog-in {
+    animation: scale-in var(--duration-normal) var(--ease-enter) both;
+  }
+  .animate-dialog-out {
+    animation: scale-out var(--duration-micro) var(--ease-exit) both;
+  }
+}
+
+/* The tick on a verified payment and on a granted authorisation. Targets the child
+   path so it can be put on a lucide icon element directly. `--stagger` inherits from
+   whatever wraps the icon, so a tick inside a delayed badge draws when the badge
+   arrives rather than before it. */
+.animate-check-draw path,
+.animate-check-draw polyline {
+  stroke-dasharray: 26;
+  animation-name: check-draw;
+  animation-duration: var(--duration-normal);
+  animation-timing-function: var(--ease-enter);
+  animation-fill-mode: both;
+  animation-delay: min(calc(var(--stagger, 0) * var(--stagger-step)), 300ms);
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}
+.animate-thinking {
+  animation: thinking 1.2s ease-in-out infinite;
+}
+
+/*
+  Theme switch (spec section 35): a colour crossfade and nothing else - no wipe, no
+  ripple. The attribute is set on <html> for the length of the change and removed
+  again, so the app is not carrying a global colour transition during ordinary use,
+  where it would smear every hover state on every surface.
+
+  Scoped under no-preference rather than relying on the block below, because this
+  rule would otherwise out-specify the reduced-motion override.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme-switching] *,
+  html[data-theme-switching] *::before,
+  html[data-theme-switching] *::after {
+    transition-property: background-color, border-color, color, fill, stroke !important;
+    transition-duration: var(--duration-micro) !important;
+    transition-timing-function: var(--ease-layout) !important;
+  }
+}
+
+/*
+  Reduced motion is honoured globally rather than per-component, so a new animated
+  surface cannot forget to opt in. Delays are zeroed along with durations: a staggered
+  entrance holds its `from` state until its delay elapses, so a 0.01ms animation with a
+  250ms delay is a quarter of a second of invisible content, which is worse than the
+  animation was. Scale and slide on hover are opted out at the call site instead, with
+  `motion-safe:`, because only the component knows which transform is decoration.
+*/
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

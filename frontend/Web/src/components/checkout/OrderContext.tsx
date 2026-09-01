@@ -68,7 +68,7 @@ export function OrderContext({ className }: { className?: string }) {
         // of a row here is a failed read, not a missing order. Said plainly, because
         // a blank panel would read as "no order".
         <p className="text-danger text-[12px] leading-relaxed">
-          This order could not be read from the backend just now. Its status is unknown — not
+          This order could not be read from the backend just now. Its status is unknown, not
           failed, and not paid.
         </p>
       ) : !order ? (
@@ -112,9 +112,9 @@ export function OrderContext({ className }: { className?: string }) {
               </strong>{' '}
               {verified
                 ? isMock
-                  ? '— by the labelled simulation standing in for the Razorpay webhook, not by Razorpay.'
-                  : '— Razorpay confirmed this payment with a signed webhook.'
-                : '— no verified payment has been recorded for this order. Nothing has been charged.'}
+                  ? 'Confirmed by the labelled simulation standing in for the Razorpay webhook, not by Razorpay.'
+                  : 'Razorpay confirmed this payment with a signed webhook.'
+                : 'No verified payment has been recorded for this order. Nothing has been charged.'}
             </p>
           </div>
 

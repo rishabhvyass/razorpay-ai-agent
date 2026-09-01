@@ -3,14 +3,19 @@ import { cn } from '@/lib/cn';
 
 type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'razorpay';
 
+/**
+ * Filled tints rather than outlines. A status badge is one of the few places
+ * Mercora uses a pill, and it has to be readable at 10px against both a white card
+ * and a tinted block — an outline-only chip disappears on the tinted one.
+ */
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-surface-sunken text-muted border-line',
-  accent: 'bg-accent-50 text-accent-700 border-accent-200',
-  success: 'bg-success-bg text-success border-success-line',
-  warning: 'bg-warning-bg text-warning border-warning-line',
-  danger: 'bg-danger-bg text-danger border-danger-line',
-  info: 'bg-info-bg text-info border-info-line',
-  razorpay: 'bg-info-bg text-razorpay border-info-line',
+  neutral: 'bg-surface-sunken text-muted',
+  accent: 'bg-accent-100 text-accent-700',
+  success: 'bg-success-bg text-success',
+  warning: 'bg-warning-bg text-warning',
+  danger: 'bg-danger-bg text-danger',
+  info: 'bg-info-bg text-info',
+  razorpay: 'bg-warning-bg text-razorpay',
 };
 
 export interface BadgeProps {
@@ -30,7 +35,7 @@ export function Badge({ tone = 'neutral', icon, children, className, pulse = fal
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] leading-5 font-medium tracking-tight',
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] leading-4 font-bold uppercase tracking-[0.08em]',
         TONES[tone],
         className,
       )}

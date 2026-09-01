@@ -18,7 +18,7 @@ export function FailureHandlingSection() {
             <div className="space-y-3 pt-2">
               <div className="flex items-center gap-3 text-sm text-[#0F172A] dark:text-white">
                 <CheckCircle2 className="h-4 w-4 text-[#16A34A] shrink-0" aria-hidden="true" />
-                <span>Zero fake success feedback — state changes only upon verified webhook</span>
+                <span>Zero fake success feedback. State changes only upon verified webhook</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-[#0F172A] dark:text-white">
                 <CheckCircle2 className="h-4 w-4 text-[#16A34A] shrink-0" aria-hidden="true" />

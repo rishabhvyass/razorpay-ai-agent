@@ -15,7 +15,7 @@ const PILLARS = [
     icon: ShieldCheck,
     title: 'Guarded Transactions',
     description:
-      'Money movement cannot be triggered autonomously. Every payment link issuance requires explicit human confirmation via standard biometrics or button press.',
+      'Money movement cannot be triggered autonomously. Standard Checkout opens only after explicit human confirmation via the approval button.',
   },
   {
     icon: Zap,

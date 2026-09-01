@@ -39,7 +39,6 @@ export interface CheckoutHandlerResponse {
   razorpay_order_id: string;
   razorpay_signature: string;
 }
-
 export type CheckoutOutcome =
   | { kind: 'completed'; response: CheckoutHandlerResponse }
   | { kind: 'dismissed' }

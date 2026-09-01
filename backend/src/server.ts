@@ -185,7 +185,7 @@ export function createApp(): Express {
         configured: isAgentConfigured,
         ...(isAgentConfigured
           ? {}
-          : { note: 'POST /api/chat returns 501 until AGENTROUTER_API_KEY is set.' }),
+          : { note: 'POST /api/chat returns 501 until an AI provider key is set.' }),
       },
       requestId: req.requestId,
     });
@@ -229,8 +229,8 @@ async function main(): Promise<void> {
     console.log(
       `  agent       ${
         isAgentConfigured
-          ? `${agentConfig?.provider === 'grok' ? 'Grok' : 'Claude'} configured (${agentConfig?.model})`
-          : 'not configured (set XAI_API_KEY or AGENTROUTER_API_KEY)'
+          ? `${agentConfig?.provider === 'openai' ? 'OpenAI' : agentConfig?.provider === 'grok' ? 'Grok' : 'Claude'} configured (${agentConfig?.model})`
+          : 'not configured (set OPENAI_API_KEY or another supported provider key)'
       }\n`,
     );
   });

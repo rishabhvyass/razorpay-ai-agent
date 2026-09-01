@@ -7,7 +7,7 @@
  * and then resolved to 'success', 'failed' or 'blocked' when the outcome is
  * known. If the process dies mid-call, the 'started' row survives as proof.
  *
- * MONEY_ACTION tools (create_order, create_payment_link) require explicit
+ * MONEY_ACTION tools (create_order) require explicit
  * approval. Without it they write a 'blocked' row and return a refusal to
  * Claude, so the model learns the guardrail exists and can explain it to the
  * user. The refusal is never silent.
@@ -36,9 +36,6 @@ import {
   getCategories,
   type PublicProduct,
 } from '../repositories/productRepo.js';
-import {
-  issuePaymentLink,
-} from '../services/paymentService.js';
 import {
   enforceMoneyActionPolicy,
 } from '../policy/moneyActionPolicy.js';
@@ -132,24 +129,6 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         },
       },
       required: ['product_id'],
-    },
-  },
-  {
-    name: 'create_payment_link',
-    description:
-      'Issue a Razorpay payment link for an existing order. This is a MONEY ' +
-      'ACTION that requires explicit user approval. The user must have already ' +
-      'approved the purchase and an order must exist. Returns a payment URL ' +
-      'the user can click to pay.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        order_id: {
-          type: 'string',
-          description: 'UUID of the order to create a payment link for.',
-        },
-      },
-      required: ['order_id'],
     },
   },
   {
@@ -270,26 +249,6 @@ export const OPENAI_TOOL_DEFINITIONS = [
   {
     type: 'function' as const,
     function: {
-      name: 'create_payment_link',
-      description:
-        'Create a hosted Razorpay Payment Link for an order. This is a MONEY ' +
-        'ACTION that moves the order to PAYMENT_PENDING and generates a payment ' +
-        'URL the user can use to complete checkout. Requires explicit user approval.',
-      parameters: {
-        type: 'object',
-        properties: {
-          order_id: {
-            type: 'string',
-            description: 'The UUID of the order to create a payment link for.',
-          },
-        },
-        required: ['order_id'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
       name: 'get_order_status',
       description:
         'Check the current status and payment details of an existing order.',
@@ -318,11 +277,10 @@ const TOOL_ACTION_TYPES: Record<string, ActionType> = {
   get_product: 'READ_ACTION',
   get_categories: 'READ_ACTION',
   create_order: 'MONEY_ACTION',
-  create_payment_link: 'MONEY_ACTION',
   get_order_status: 'READ_ACTION',
 };
 
-const MONEY_TOOLS = new Set(['create_order', 'create_payment_link']);
+const MONEY_TOOLS = new Set(['create_order']);
 
 // -----------------------------------------------------------------------------
 // Tool execution context
@@ -462,7 +420,7 @@ async function execCreateOrder(
         `Reusing existing open order (Idempotent):`,
         formatOrder(existing),
         '',
-        'The order is already created. To proceed with payment, call create_payment_link.',
+        'The order is ready. The app will open Razorpay Standard Checkout in a payment modal.',
       ].join('\n'),
       output: {
         orderId: existing.id,
@@ -485,57 +443,10 @@ async function execCreateOrder(
       `Order created successfully.`,
       formatOrder(order),
       '',
-      'The order is in PENDING_CONFIRMATION. To proceed with payment, call create_payment_link.',
+      'The order is ready. The app will open Razorpay Standard Checkout in a payment modal.',
     ].join('\n'),
     output: { orderId: order.id, status: order.status, amount: order.amount },
     orderId: order.id,
-  };
-}
-
-async function execCreatePaymentLink(
-  input: Record<string, unknown>,
-  ctx: ToolContext,
-): Promise<{ result: string; output: unknown }> {
-  const orderId = input.order_id;
-  if (typeof orderId !== 'string') {
-    return { result: 'Error: order_id is required.', output: { error: 'missing_order_id' } };
-  }
-
-  // Enforce Policy Layer (Authorization, State machine validation)
-  await enforceMoneyActionPolicy({
-    actionType: 'CREATE_PAYMENT_LINK',
-    conversationId: ctx.conversationId,
-    orderId,
-    userApproved: ctx.userApproved,
-    approvalReason: 'User explicitly approved purchase in conversation.',
-    requestId: ctx.requestId,
-  });
-
-  const view = await issuePaymentLink({
-    orderId,
-    approved: true,
-    approvalReason: 'User explicitly approved purchase in conversation.',
-    conversationId: ctx.conversationId,
-    requestId: ctx.requestId,
-  });
-
-  const paymentUrl = view.paymentUrl;
-
-  return {
-    result: [
-      `Payment link issued.`,
-      `Order: ${view.order.id}`,
-      `Status: ${view.order.status}`,
-      `Amount: ${view.order.amountFormatted}`,
-      paymentUrl ? `Payment URL: ${paymentUrl}` : 'No payment URL was returned.',
-      '',
-      'Share the payment URL with the user. The order becomes PAID only after Razorpay confirms.',
-    ].join('\n'),
-    output: {
-      orderId: view.order.id,
-      status: view.order.status,
-      paymentUrl,
-    },
   };
 }
 
@@ -642,9 +553,6 @@ export async function executeTool(
         break;
       case 'create_order':
         execResult = await execCreateOrder(input, ctx);
-        break;
-      case 'create_payment_link':
-        execResult = await execCreatePaymentLink(input, ctx);
         break;
       case 'get_order_status':
         execResult = await execGetOrderStatus(input);

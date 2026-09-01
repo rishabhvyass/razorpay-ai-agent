@@ -1,20 +1,13 @@
 import { Check, Circle, Hourglass, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useChangeCount } from '@/hooks/useChangeCount';
 import type { Order } from '@/types';
 
 /**
- * The four-step payment tracker from spec sections 20, 22 and 28.
+ * A compact, read-only view of the payment lifecycle.
  *
- * Deliberately separate from `OrderTimeline`, which narrates the whole order
- * lifecycle on the detail page. This one answers a narrower question the payment
- * card needs to answer at a glance: how far has *this payment* got, and is it still
- * moving?
- *
- * Every step's state is derived from the order row and the presence of a real
- * payment link - never from elapsed time, never from a local guess. "Payment link
- * generated" does not tick just because an order exists: if the payments layer has
- * not issued a link, the step stays open, because claiming otherwise would be the
- * interface asserting something it cannot see.
+ * The tracker never names or exposes a payment instrument. Each state comes from
+ * the order row and provider identifiers, not from a timer or a local assumption.
  */
 type StepState = 'done' | 'current' | 'upcoming' | 'failed';
 
@@ -25,101 +18,93 @@ const ICON: Record<StepState, typeof Check> = {
   failed: X,
 };
 
+const STATE_WORD: Record<StepState, string> = {
+  done: 'Complete',
+  current: 'Waiting',
+  upcoming: 'Not started',
+  failed: 'Failed',
+};
+
 function Step({ label, state, last }: { label: string; state: StepState; last: boolean }) {
   const Icon = ICON[state];
+  const changes = useChangeCount(state);
+  const transitioned = changes > 0;
 
   return (
-    <li className="flex items-center gap-2">
+    <li className="relative flex items-start gap-3 pb-3 last:pb-0">
+      {!last ? (
+        <span
+          className={cn(
+            'motion-normal absolute top-6 bottom-0 left-[11px] w-0.5 transition-colors',
+            state === 'done' ? 'bg-success' : 'bg-line',
+          )}
+          aria-hidden
+        />
+      ) : null}
+
       <span
         className={cn(
-          'grid size-4 shrink-0 place-items-center rounded-full',
+          'rounded-control motion-fast relative z-10 grid size-6 shrink-0 place-items-center',
+          'transition-[background-color,border-color]',
           state === 'done' && 'bg-success text-white',
           state === 'current' && 'bg-warning text-white',
-          state === 'upcoming' && 'border-line-strong bg-surface border',
+          state === 'upcoming' && 'border-line-strong bg-surface border-2',
           state === 'failed' && 'bg-danger text-white',
         )}
         aria-hidden
       >
-        {state === 'upcoming' ? null : <Icon className="size-2.5" strokeWidth={3.5} />}
-      </span>
-
-      <span
-        className={cn(
-          'text-[12px] leading-tight',
-          state === 'upcoming' ? 'text-faint' : 'text-muted',
-          state === 'current' && 'text-ink font-medium',
+        {state === 'upcoming' ? (
+          <span className="bg-line-strong size-1.5 rounded-full" />
+        ) : (
+          <Icon
+            key={changes}
+            className={cn(
+              'size-3.5',
+              transitioned && (state === 'done' ? 'animate-check-draw' : 'animate-check-pop'),
+            )}
+            strokeWidth={3}
+          />
         )}
-      >
-        {label}
       </span>
 
-      {/* The state is also written out for assistive tech, because the icon and the
-          colour are the only visual carriers and spec section 37 forbids relying on
-          colour alone. */}
-      <span className="sr-only">
-        {state === 'done'
-          ? ' — complete'
-          : state === 'current'
-            ? ' — in progress'
-            : state === 'failed'
-              ? ' — failed'
-              : ' — not started'}
-      </span>
-
-      {!last ? <span className="bg-line ml-0.5 h-px flex-1" aria-hidden /> : null}
+      <div className="flex min-w-0 flex-1 items-baseline justify-between gap-3 pt-0.5">
+        <span
+          className={cn(
+            'motion-fast text-[12.5px] leading-tight font-bold tracking-[-0.01em] transition-colors',
+            state === 'upcoming' ? 'text-faint' : 'text-ink',
+          )}
+        >
+          {label}
+        </span>
+        <span
+          className={cn(
+            'motion-fast shrink-0 text-[10px] font-bold tracking-[0.08em] uppercase transition-colors',
+            state === 'done' && 'text-success',
+            state === 'current' && 'text-warning',
+            state === 'failed' && 'text-danger',
+            state === 'upcoming' && 'text-faint',
+          )}
+        >
+          {STATE_WORD[state]}
+        </span>
+      </div>
     </li>
   );
 }
 
-export function PaymentSteps({
-  order,
-  paymentUrl,
-}: {
-  order: Order;
-  /** A real link, from the backend or the labelled mock. Absence keeps step 2 open. */
-  paymentUrl?: string | null;
-}) {
+export function PaymentSteps({ order }: { order: Order }) {
   const failed =
     order.status === 'PAYMENT_FAILED' ||
     order.status === 'PAYMENT_EXPIRED' ||
     order.status === 'CANCELLED';
   const paid = order.status === 'PAID';
-
-  // A payment instrument exists if the provider issued one, or if one is in hand
-  // right now. Past orders keep the id even after the URL is no longer held in memory.
-  const hasLink =
-    Boolean(paymentUrl) ||
+  const paymentStarted =
     Boolean(order.razorpayPaymentLinkId) ||
     Boolean(order.razorpayOrderId) ||
     order.status === 'PAYMENT_PENDING' ||
     paid;
 
-  // The step is named after the instrument that actually exists. "Payment link
-  // generated" on an order paid through the checkout modal describes something that
-  // never happened - there is no link, and a reviewer reading the tracker against the
-  // order row would find no `razorpayPaymentLinkId` to match it. A link id is
-  // conclusive; a Razorpay order id with no link id means the modal. With neither, the
-  // step has not happened yet and the label is the one the spec's tracker names.
-  const instrument =
-    order.razorpayPaymentLinkId === null && order.razorpayOrderId !== null
-      ? 'Secure checkout opened'
-      : 'Payment link generated';
-
-  // A settled order has nothing in progress. Reading "…generated - in progress"
-  // underneath "Payment not verified - failed" describes a payment that is still
-  // moving, on an order that has stopped. Which of the two replaces it depends
-  // on what the terminal status actually implies:
-  //
-  //   PAYMENT_FAILED / PAYMENT_EXPIRED  the provider had an attempt to decline or
-  //                                     expire, so an instrument existed. Done.
-  //   CANCELLED                         says nothing about whether one was ever
-  //                                     issued, so it is left not-started rather
-  //                                     than claimed either way.
-  //
-  // This is only reached when nothing is in hand: the mock overlay's URL is not
-  // threaded through the failure card, and a real failed order keeps no live URL, so
-  // `hasLink` cannot see one even though one existed.
-  const linkState: StepState = hasLink
+  const initiationState: StepState = paymentStarted
     ? 'done'
     : order.status === 'PAYMENT_FAILED' || order.status === 'PAYMENT_EXPIRED'
       ? 'done'
@@ -129,7 +114,7 @@ export function PaymentSteps({
 
   const steps: Array<{ label: string; state: StepState }> = [
     { label: 'Order created', state: 'done' },
-    { label: instrument, state: linkState },
+    { label: 'Payment initiation', state: initiationState },
   ];
 
   if (failed) {
@@ -137,13 +122,13 @@ export function PaymentSteps({
   } else {
     steps.push({
       label: 'Waiting for payment',
-      state: paid ? 'done' : hasLink ? 'current' : 'upcoming',
+      state: paid ? 'done' : paymentStarted ? 'current' : 'upcoming',
     });
     steps.push({ label: 'Payment verification', state: paid ? 'done' : 'upcoming' });
   }
 
   return (
-    <ol className="flex flex-col gap-2" aria-label="Payment progress">
+    <ol className="flex flex-col" aria-label="Payment progress">
       {steps.map((step, index) => (
         <Step
           key={step.label}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Info, ListTree, Search, SlidersHorizontal, X } from 'lucide-react';
 import { Page } from '@/components/layout/PageContainer';
 import { AgentActivityTimeline } from '@/components/agent/AgentActivityTimeline';
+import { ExecutionTrace } from '@/components/agent/ExecutionTrace';
 import { Button, Card, Input, MockNotice } from '@/components/ui';
 import { useAuditTrail } from '@/hooks/useAuditTrail';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -20,7 +21,7 @@ type StatusFilter = AgentActionStatus | 'all';
  * "the agent did nothing" and "this view cannot see everything".
  */
 export function ActivityPage() {
-  const { feed, isPending, error, sources, refetch } = useAuditTrail();
+  const { feed, orders, isPending, error, sources, refetch } = useAuditTrail();
 
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -74,6 +75,19 @@ export function ActivityPage() {
       }
     >
       <div className="space-y-4">
+        {/* The shape of the flow, before the line-by-line trail. Every block below is
+            derived from the same recorded actions the timeline renders. */}
+        <div>
+          <h2 className="text-ink text-[15px] font-bold tracking-[-0.01em]">
+            How a purchase travels
+          </h2>
+          <p className="text-muted mt-1 mb-3 text-[12px] leading-relaxed">
+            Eight stages, each one either recorded or not. A grey block means it has not happened -
+            nothing here lights up on its own.
+          </p>
+          <ExecutionTrace actions={feed.actions} orders={orders} />
+        </div>
+
         {/* What this view can and cannot see. */}
         <div className="rounded-card border-info-line bg-info-bg flex items-start gap-2.5 border px-3.5 py-3">
           <Info className="text-info mt-0.5 size-4 shrink-0" aria-hidden />
@@ -96,7 +110,7 @@ export function ActivityPage() {
             {sources.unreadableOrderCount > 0 ? (
               <p className="text-danger mt-1.5">
                 {sources.unreadableOrderCount} of those order scopes could not be read, so this
-                trail is incomplete — actions recorded against{' '}
+                trail is incomplete. Actions recorded against{' '}
                 {sources.unreadableOrderCount === 1 ? 'that order' : 'those orders'} are missing
                 from the list and from the counts below.
               </p>
@@ -107,9 +121,9 @@ export function ActivityPage() {
         {sources.localCount > 0 ? (
           <MockNotice>
             {sources.localCount} of the entries below were generated locally.{' '}
-            <code>POST /api/chat</code> is not implemented, so the agent's reasoning steps are
-            simulated and were never written to the <code>agent_actions</code> table. Order creation
-            is real.
+            <code>POST /api/chat</code> is served by the configured backend AI provider. These
+            entries were generated locally and were never written to the <code>agent_actions</code>{' '}
+            table. Order creation is real.
           </MockNotice>
         ) : null}
 
@@ -235,7 +249,7 @@ export function ActivityPage() {
               emptyDescription={
                 isFiltered
                   ? 'Clear the filters to see the full trail.'
-                  : 'Start a checkout and every tool call the agent makes will appear here — reads, writes and money actions, each with the reason it was taken.'
+                  : 'Start a checkout and every tool call the agent makes will appear here. Reads, writes, and money actions include the reason they were taken.'
               }
             />
           </div>

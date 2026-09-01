@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { duration } from '@/lib/motion';
 
 /**
  * Everything inside the panel that a Tab press may land on.
@@ -81,6 +82,7 @@ export function Modal({
   children,
   footer,
   variant = 'center',
+  side = 'right',
   labelledBy = 'modal-title',
 }: {
   open: boolean;
@@ -91,24 +93,97 @@ export function Modal({
   footer?: ReactNode;
   /** `drawer` slides in from the right - used for the agent panel below 1100px. */
   variant?: 'center' | 'drawer';
+  /** Drawers can enter from the edge where their trigger lives. */
+  side?: 'left' | 'right';
   labelledBy?: string;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
 
+  /**
+   * Closing is a state, not just the absence of open (spec section 21).
+   *
+   * `open: false` used to return `null` on the next render, so a dialog vanished on the
+   * frame the user dismissed it - the one moment when a little continuity is worth
+   * having, because it shows where the panel went and hands the page back rather than
+   * cutting to it. So the panel is held in the DOM for exactly the length of the exit
+   * animation and plays it, then unmounts.
+   *
+   * The length comes from `duration('micro')`, which reads the same token the CSS
+   * animation uses, so the timer cannot drift from the keyframes. Under reduced motion
+   * that token reads 0 and this collapses back to the old immediate unmount, which is
+   * the correct behaviour there rather than a compromise.
+   *
+   * Everything else - focus restoration, un-inerting the page, the scroll lock - stays
+   * keyed to `open` and therefore happens immediately. A leaving panel must not hold
+   * the keyboard, so the pointer is taken off it below.
+   *
+   * Only one piece of state, and `closing` is derived rather than stored: a panel is
+   * leaving exactly when it is still mounted and no longer open. The one transition
+   * that cannot be derived - dropping out of the DOM once the animation is over - is
+   * made from the timer callback, which is the only place a state change belongs in an
+   * effect.
+   */
+  const [rendered, setRendered] = useState(open);
+
+  // Opening is adjusted during render, not in an effect: an effect would paint one
+  // frame with the panel absent and start the entrance animation on the frame after,
+  // which is a visible hitch at the exact moment the reader asked for the dialog.
+  if (open && !rendered) setRendered(true);
+  const closing = rendered && !open;
+
+  useEffect(() => {
+    if (!closing) return;
+
+    const timer = window.setTimeout(() => setRendered(false), duration('micro'));
+    return () => window.clearTimeout(timer);
+  }, [closing]);
+
+  /**
+   * Where focus was before the panel took it.
+   *
+   * This used to be read at the top of the open/close effect below, which is one commit
+   * too late. A child rendered with `autoFocus` - the assistant drawer's composer is one
+   * - is focused by React while the panel is still being committed, and every effect runs
+   * after that. So the element recorded as "the trigger" was a control inside the dialog,
+   * and closing handed focus back to something that was about to unmount, which dropped
+   * the keyboard on `<body>`: Tab then restarted from the top of the page instead of
+   * carrying on beside the launcher.
+   *
+   * Watching `focusin` records the answer before the panel exists to overwrite it. Three
+   * targets are deliberately not treated as triggers: `<body>`, which is where the browser
+   * parks focus when `inertOutside` blurs the real trigger a moment later; anything inside
+   * this dialog's own overlay; and anything inside any open dialog panel, which is what
+   * actually catches the `autoFocus` case - `overlayRef` is attached later in the same
+   * commit than a child's `autoFocus` runs, so the containment check alone cannot see the
+   * one event that started this. `[aria-modal]` is in the DOM by then either way.
+   *
+   * The cost of reading it that way is that a dialog opened by a control inside another
+   * dialog has no trigger recorded for it. Nothing in this app nests dialogs, and the
+   * restore below degrades to leaving focus where it is rather than throwing it somewhere
+   * wrong.
+   */
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || target === document.body) return;
+      if (overlayRef.current?.contains(target)) return;
+      if (target.closest('[aria-modal="true"]')) return;
+
+      restoreFocusTo.current = target;
+    };
+
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, []);
+
   // Open and close: scroll lock, the inert background, and the focus handover. Keyed on
   // `open` alone, deliberately - callers pass an inline arrow for `onClose`, so listing
   // it here would tear this down and set it up again on every parent render, each time
-  // throwing focus out to the trigger and back to the panel mid-interaction, and
-  // recapturing "where focus came from" while it is already inside the dialog.
+  // throwing focus out to the trigger and back to the panel mid-interaction.
   useEffect(() => {
     if (!open) return;
-
-    // Read the trigger before anything is inerted: inerting an ancestor of the focused
-    // element blurs it, and then there is nothing left to hand focus back to on close.
-    const trigger = document.activeElement;
-    restoreFocusTo.current = trigger instanceof HTMLElement ? trigger : null;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -117,7 +192,9 @@ export function Modal({
     const restoreInert = overlay ? inertOutside(overlay) : null;
 
     // Focus the panel itself rather than its first control: focusing a button can
-    // mean Enter immediately activates something the user never chose.
+    // mean Enter immediately activates something the user never chose. A child that
+    // asks for focus outright, like the drawer's composer, still gets it - a text
+    // field carries none of that hazard.
     panelRef.current?.focus();
 
     return () => {
@@ -126,7 +203,12 @@ export function Modal({
       // inert subtree does nothing at all, and the trigger is one of the things that was
       // just inerted.
       restoreInert?.();
-      restoreFocusTo.current?.focus();
+      // A trigger can also be gone by now - a table row that has since re-rendered, an
+      // item in a menu that closed behind the dialog - and focusing a detached node does
+      // nothing at all, which reads as focus vanishing rather than returning. Better to
+      // leave it where it is than to move it nowhere.
+      const trigger = restoreFocusTo.current;
+      if (trigger?.isConnected) trigger.focus();
     };
   }, [open]);
 
@@ -181,12 +263,21 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!rendered) return null;
 
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-50 flex" role="presentation">
+    <div
+      ref={overlayRef}
+      className={cn('fixed inset-0 z-50 flex', closing && 'pointer-events-none')}
+      role="presentation"
+    >
+      {/* A flat scrim. No backdrop blur: the point is to remove the page behind from
+          consideration, not to render frosted glass over it. */}
       <div
-        className="animate-fade-in absolute inset-0 bg-[rgb(17_19_24/0.32)] backdrop-blur-[1px]"
+        className={cn(
+          'absolute inset-0 bg-[rgb(17_24_39/0.45)]',
+          closing ? 'animate-fade-out' : 'animate-fade-in',
+        )}
         onClick={onClose}
         aria-hidden
       />
@@ -198,26 +289,42 @@ export function Modal({
         aria-labelledby={labelledBy}
         tabIndex={-1}
         className={cn(
-          'bg-surface relative flex flex-col shadow-lifted outline-none',
+          'bg-surface border-line relative flex flex-col border shadow-none outline-none',
           variant === 'center'
-            ? 'animate-fade-up rounded-card m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-lg'
-            : 'animate-slide-in-right ml-auto h-full w-[min(26rem,100%)] border-line border-l',
+            ? // Below 640px a centred dialog is a bottom sheet: full width, pinned to
+              // the bottom edge, square at the bottom because there is no canvas
+              // beneath it to round against. This is the approval gate's mobile form.
+              // `animate-dialog-*` carries that same split in its motion - a sheet
+              // slides, a panel scales - so this element only says which direction
+              // the dialog is going.
+              cn(
+                'mt-auto max-h-[88vh] w-full rounded-t-2xl sm:m-auto sm:max-h-[85vh] sm:w-[calc(100%-2rem)] sm:max-w-lg sm:rounded-card',
+                closing ? 'animate-dialog-out' : 'animate-dialog-in',
+              )
+            : cn(
+                'h-full w-[min(26rem,100%)]',
+                side === 'left'
+                  ? cn('mr-auto', closing ? 'animate-slide-out-left' : 'animate-slide-in-left')
+                  : cn('ml-auto', closing ? 'animate-slide-out-right' : 'animate-slide-in-right'),
+              ),
         )}
       >
         <div className="border-line flex items-start justify-between gap-4 border-b px-5 py-4">
           <div className="min-w-0">
-            <h2 id={labelledBy} className="text-ink text-sm font-semibold">
+            <h2 id={labelledBy} className="text-ink text-[15px] font-bold">
               {title}
             </h2>
-            {description ? <p className="text-muted mt-0.5 text-[13px]">{description}</p> : null}
+            {description ? (
+              <p className="text-muted mt-1 text-[13px] leading-relaxed">{description}</p>
+            ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-faint hover:text-ink hover:bg-surface-sunken -mr-1.5 -mt-1 grid size-8 shrink-0 place-items-center rounded-lg transition-colors"
+            className="text-faint hover:bg-surface-sunken hover:text-ink rounded-control motion-fast -mr-2 -mt-1 grid size-11 shrink-0 place-items-center transition-colors"
           >
-            <X className="size-4" aria-hidden />
+            <X className="size-4.5" aria-hidden />
           </button>
         </div>
 

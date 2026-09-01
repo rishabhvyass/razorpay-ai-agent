@@ -64,7 +64,6 @@ function Block({
           orderId={block.order.id}
           fallbackOrder={block.order}
           product={block.product}
-          fallbackPaymentUrl={block.paymentUrl}
         />
       );
 

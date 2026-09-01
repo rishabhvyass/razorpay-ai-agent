@@ -4,7 +4,7 @@ import { Page } from '@/components/layout/PageContainer';
 import { Button, Card } from '@/components/ui';
 
 const DESTINATIONS = [
-  { to: '/', label: 'Overview', hint: 'Metrics and recent orders' },
+  { to: '/dashboard', label: 'Overview', hint: 'Metrics and recent orders' },
   { to: '/checkout', label: 'Checkout', hint: 'Talk to the agent' },
   { to: '/orders', label: 'Orders', hint: 'What has been authorised' },
   { to: '/products', label: 'Products', hint: 'The catalogue the agent reads' },
@@ -23,7 +23,7 @@ export function NotFoundPage() {
                 <h2 className="text-ink text-[13px] font-semibold">Nothing here</h2>
                 <p className="text-muted mt-1 text-[13px] leading-relaxed">
                   The URL did not match any route. If you followed a link to an order, the id may
-                  belong to a database that has since been reset — the Orders page will say so
+                  belong to a database that has since been reset. The Orders page will say so
                   explicitly rather than showing a blank row.
                 </p>
               </div>
@@ -42,7 +42,7 @@ export function NotFoundPage() {
                 ))}
               </ul>
 
-              <Link to="/">
+              <Link to="/dashboard">
                 <Button variant="primary" size="md">
                   Go to the overview
                 </Button>

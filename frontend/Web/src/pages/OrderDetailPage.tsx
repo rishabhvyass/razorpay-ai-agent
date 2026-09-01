@@ -128,7 +128,7 @@ export function OrderDetailPage() {
               <Card tone="info">
                 <CardHeader
                   title="Product unavailable"
-                  description="The product row this order points at could not be read. The order's own amount is unaffected — it is stored on the order."
+                  description="The product row this order points at could not be read. The order's own amount is unaffected because it is stored on the order."
                   icon={<Package className="size-4" aria-hidden />}
                 />
               </Card>
@@ -137,7 +137,7 @@ export function OrderDetailPage() {
             <Card tone="info">
               <CardHeader
                 title="How this page stays honest"
-                description="The status, amount and payment identifiers are read from the backend on a poll. No value here is computed in the browser, and no state is assumed after an action — the page waits for the server to say it happened."
+                description="The status, amount and payment identifiers are read from the backend on a poll. No value here is computed in the browser. After an action, the page waits for the server to say it happened."
                 icon={<Route className="size-4" aria-hidden />}
               />
             </Card>

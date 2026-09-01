@@ -90,35 +90,34 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className={cn(
-        'rounded-card border-danger-line bg-danger-bg border',
-        compact ? 'p-3' : 'p-5',
-        className,
-      )}
+      className={cn('rounded-card bg-danger-bg', compact ? 'p-4' : 'p-6', className)}
     >
       <div className="flex items-start gap-3">
-        <Icon className="text-danger mt-0.5 size-4 shrink-0" aria-hidden />
+        <Icon className="text-danger mt-0.5 size-5 shrink-0" strokeWidth={2.25} aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-ink text-sm font-semibold">{info.title}</p>
-          <p className="text-muted mt-1 text-[13px] leading-relaxed break-words">{info.message}</p>
-          <p className="text-muted mt-1.5 text-xs leading-relaxed">{info.hint}</p>
+          <p className="text-ink text-[15px] font-bold">{info.title}</p>
+          <p className="text-ink/80 mt-1.5 text-[13px] leading-relaxed break-words">
+            {info.message}
+          </p>
+          <p className="text-muted mt-2 text-[12px] leading-relaxed">{info.hint}</p>
 
           {info.code || info.requestId ? (
-            <div className="text-faint nums mt-2.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px]">
+            <div className="text-muted nums mt-3 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px]">
               {info.code ? <span>{info.code}</span> : null}
-              {/* Traceable in backend logs. Not a secret - the backend puts this
-                  same id in its own log line for the failed request. */}
-              {info.requestId ? <span>request {info.requestId}</span> : null}
+              {/* Traceable in backend logs. Not a secret — the backend puts this same
+                  id in its own log line for the failed request. A stack trace, a
+                  header or a key never appears here. */}
+              {info.requestId ? <span>Request ID {info.requestId}</span> : null}
             </div>
           ) : null}
 
           {onRetry ? (
             <Button
               size="sm"
-              variant="secondary"
+              variant="outline"
               onClick={onRetry}
               icon={<RefreshCw className="size-3.5" aria-hidden />}
-              className="mt-3.5"
+              className="mt-4 border-2"
             >
               Retry
             </Button>

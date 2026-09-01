@@ -117,8 +117,8 @@ export function AgentActivityPanel({
       <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {hasLocalActions ? (
           <MockNotice className="mb-4">
-            Some entries below were produced locally. <code>POST /api/chat</code> is not implemented
-            on the backend, so the agent's tool calls are simulated and are not written to the{' '}
+            Some entries below were produced locally. <code>POST /api/chat</code> is served by the
+            configured backend AI provider, so these local entries may be incomplete and are not written to the{' '}
             <code>agent_actions</code> table. Order creation is real.
           </MockNotice>
         ) : null}
@@ -135,7 +135,7 @@ export function AgentActivityPanel({
             {actions.length > 0 ? (
               <p className="text-faint text-[11px] leading-relaxed">
                 The entries below are the ones already in hand. Because that read failed, this
-                trail may be missing actions the backend has recorded — treat it as incomplete
+                trail may be missing actions the backend has recorded. Treat it as incomplete
                 until the retry succeeds.
               </p>
             ) : null}

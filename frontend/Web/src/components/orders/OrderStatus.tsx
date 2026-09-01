@@ -50,7 +50,7 @@ export const ORDER_STATUS_PRESENTATION: Record<OrderStatusValue, StatusPresentat
     tone: 'warning',
     icon: <Hourglass className="size-3" aria-hidden />,
     pulse: true,
-    meaning: 'A payment link was issued. Nothing is confirmed until the provider verifies it.',
+    meaning: 'A payment is in progress. Nothing is confirmed until the provider verifies it.',
   },
   PAID: {
     label: 'Paid',
@@ -71,7 +71,7 @@ export const ORDER_STATUS_PRESENTATION: Record<OrderStatusValue, StatusPresentat
     tone: 'neutral',
     icon: <Clock className="size-3" aria-hidden />,
     pulse: false,
-    meaning: 'The payment link lapsed before it was completed. Nothing was charged.',
+    meaning: 'The payment attempt expired before it was completed. Nothing was charged.',
   },
   CANCELLED: {
     label: 'Cancelled',

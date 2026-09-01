@@ -63,8 +63,8 @@ export function OrdersPage() {
 
         {missingCount > 0 ? (
           <p className="text-faint text-[12px]">
-            {missingCount} recorded {missingCount === 1 ? 'order' : 'orders'} could not be loaded —
-            usually because the database was reset since it was created.
+            {missingCount} recorded {missingCount === 1 ? 'order' : 'orders'} could not be loaded.
+            This usually means the database was reset since the records were created.
           </p>
         ) : null}
 

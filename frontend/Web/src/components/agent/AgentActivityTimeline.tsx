@@ -44,8 +44,13 @@ export function AgentActivityTimeline({
 
   return (
     <ol className="space-y-3.5">
-      {actions.map((action) => (
-        <AgentActivityItem key={action.id} action={action} />
+      {actions.map((action, index) => (
+        // The index is the row's place in this render, which is what the stagger needs:
+        // a list that arrives together steps down it, and a single new entry landing on
+        // an open panel is at 0 and appears immediately. Rows already on screen keep the
+        // animation they finished - changing the delay of a completed animation does not
+        // restart it.
+        <AgentActivityItem key={action.id} action={action} index={index} />
       ))}
     </ol>
   );

@@ -1,6 +1,14 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Moon, Sun, Monitor } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { duration } from '@/lib/motion';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -48,8 +56,36 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const effectiveTheme = theme === 'system' ? systemTheme : theme;
 
+  /**
+   * Whether a theme has already been applied in this session.
+   *
+   * The first pass is the page adopting the stored theme, which is not a switch and
+   * must not animate: a global colour transition on first paint means the whole app
+   * fades from the wrong palette to the right one while the reader watches.
+   */
+  const applied = useRef(false);
+
   useEffect(() => {
     const root = document.documentElement;
+
+    /**
+     * Spec section 35. A theme change is a colour crossfade and nothing else - no
+     * circular wipe, no ripple, no reveal. The transition lives in CSS behind
+     * `html[data-theme-switching]` and is carried by this attribute for the length of
+     * the change only, so the app is not holding a global colour transition during
+     * ordinary use, where it would smear every hover state on every surface.
+     *
+     * The attribute has to be in the *before-change* style for the browser to have
+     * something to interpolate from, so it is set, the style is flushed, and only then
+     * do the colours move. Setting both in one task means one recalculation, and one
+     * recalculation is an instant swap.
+     */
+    if (applied.current) {
+      root.setAttribute('data-theme-switching', '');
+      void root.offsetWidth;
+    }
+    applied.current = true;
+
     if (effectiveTheme === 'dark') {
       root.classList.add('dark');
       root.setAttribute('data-theme', 'dark');
@@ -57,6 +93,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.classList.remove('dark');
       root.setAttribute('data-theme', 'light');
     }
+
+    const timer = window.setTimeout(
+      () => root.removeAttribute('data-theme-switching'),
+      duration('micro'),
+    );
+    return () => {
+      window.clearTimeout(timer);
+      root.removeAttribute('data-theme-switching');
+    };
   }, [effectiveTheme]);
 
   const setTheme = (newTheme: Theme) => {
@@ -101,14 +146,17 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} mode`}
       title={`Switch to ${effectiveTheme === 'dark' ? 'light' : 'dark'} mode`}
       className={cn(
-        'relative flex size-9 items-center justify-center rounded-lg border border-line bg-surface text-muted shadow-subtle transition-all hover:bg-surface-sunken hover:text-ink focus-visible:outline-accent',
+        'border-line bg-surface text-muted hover:bg-surface-subtle hover:text-ink focus-visible:outline-accent motion-fast relative flex size-9 items-center justify-center rounded-lg border transition-[background-color,color,border-color,transform] motion-safe:active:scale-95',
         className,
       )}
     >
+      {/* The icon that appears is the one you would switch TO, so it fades in rather
+          than the pair cross-rotating: two icons swapping places would be a decorative
+          animation on a control whose meaning is which of them is showing. */}
       {effectiveTheme === 'dark' ? (
-        <Sun className="size-4.5 text-amber-400 animate-fade-in transition-transform duration-300 hover:rotate-45" />
+        <Sun className="animate-fade-in motion-micro size-4 text-amber-400 transition-transform motion-safe:hover:rotate-45" />
       ) : (
-        <Moon className="size-4.5 text-indigo-600 animate-fade-in transition-transform duration-300 hover:-rotate-12" />
+        <Moon className="animate-fade-in motion-micro size-4 text-blue-600 transition-transform motion-safe:hover:-rotate-12" />
       )}
     </button>
   );
@@ -117,10 +165,15 @@ export function ThemeToggle({ className }: { className?: string }) {
 export function ThemeSegmentedControl({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme();
 
-  const options: Array<{ value: Theme; label: string; icon: typeof Sun }> = [
-    { value: 'light', label: 'Light', icon: Sun },
-    { value: 'dark', label: 'Dark', icon: Moon },
-    { value: 'system', label: 'System', icon: Monitor },
+  const options: Array<{
+    value: Theme;
+    label: string;
+    icon: typeof Sun;
+    activeIconColor: string;
+  }> = [
+    { value: 'light', label: 'Light', icon: Sun, activeIconColor: 'text-amber-500' },
+    { value: 'dark', label: 'Dark', icon: Moon, activeIconColor: 'text-blue-500' },
+    { value: 'system', label: 'System', icon: Monitor, activeIconColor: 'text-blue-600 dark:text-blue-400' },
   ];
 
   return (
@@ -128,7 +181,7 @@ export function ThemeSegmentedControl({ className }: { className?: string }) {
       role="radiogroup"
       aria-label="Theme selection"
       className={cn(
-        'inline-flex items-center gap-1 rounded-xl border border-line bg-surface-sunken p-1',
+        'inline-flex items-center rounded-xl border border-line bg-surface-subtle p-1 shadow-xs',
         className,
       )}
     >
@@ -143,13 +196,13 @@ export function ThemeSegmentedControl({ className }: { className?: string }) {
             aria-checked={active}
             onClick={() => setTheme(opt.value)}
             className={cn(
-              'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
+              'motion-fast relative flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-[background-color,color]',
               active
-                ? 'bg-surface text-ink shadow-subtle font-semibold'
-                : 'text-muted hover:text-ink',
+                ? 'bg-surface text-ink font-semibold shadow-xs ring-1 ring-black/5 dark:ring-white/10'
+                : 'text-muted hover:bg-surface/60 hover:text-ink',
             )}
           >
-            <Icon className={cn('size-3.5', active ? 'text-accent' : 'text-faint')} />
+            <Icon className={cn('size-3.5', active ? opt.activeIconColor : 'text-faint')} />
             <span>{opt.label}</span>
           </button>
         );

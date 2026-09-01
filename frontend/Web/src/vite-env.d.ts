@@ -16,7 +16,7 @@
 interface ImportMetaEnv {
   /** Backend origin. Empty in development - vite.config.ts proxies to :3000. */
   readonly VITE_API_URL?: string;
-  /** Serve POST /api/chat, and the payment-link states, from src/services/mock/. */
+  /** Serve POST /api/chat and labelled local states from src/services/mock/. */
   readonly VITE_USE_MOCK?: string;
   /**
    * Razorpay's PUBLISHABLE key id (`rzp_test_...`), and optional.

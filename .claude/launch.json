@@ -2,10 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "checkout-concierge",
+      "name": "mercora-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5173
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend/Web"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "mercora-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "backend"],
+      "port": 3000
     }
   ]
 }

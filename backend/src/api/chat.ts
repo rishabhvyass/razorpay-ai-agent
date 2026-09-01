@@ -11,7 +11,7 @@
  * tool execution, and guardrails all live in services/ — this file touches HTTP
  * and nothing else.
  *
- * Answers 501 when AGENTROUTER_API_KEY is not set, naming the missing variable
+ * Answers 501 when no AI provider key is set, naming the supported variables
  * (not its value). This follows the same pattern as the payment routes.
  */
 
@@ -40,8 +40,9 @@ const chatSchema = z
 function requireAgentConfigured(): void {
   if (!isAgentConfigured) {
     throw notImplemented(
-      'The agent is not configured on this server. Set AGENTROUTER_API_KEY ' +
-        'in the backend environment to enable POST /api/chat.',
+      'The agent is not configured on this server. Set OPENAI_API_KEY, ' +
+        'AGENTROUTER_API_KEY, OPENROUTER_API_KEY, or XAI_API_KEY in the backend ' +
+        'environment to enable POST /api/chat.',
     );
   }
 }

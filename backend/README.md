@@ -180,7 +180,10 @@ cp .env.example .env    # then fill in the three Supabase values
 | `RAZORPAY_KEY_ID` | all three, or none | Test-mode key id |
 | `RAZORPAY_KEY_SECRET` | all three, or none | **Backend only.** |
 | `RAZORPAY_WEBHOOK_SECRET` | all three, or none | **Backend only.** Min 8 chars. What makes signature verification meaningful. |
-| `AGENTROUTER_API_KEY` | no | **Backend only.** Present in `.env.example`, read by nothing yet — the agent layer is not built. |
+| `OPENAI_API_KEY` | no | **Backend only.** Direct OpenAI key used by `POST /api/chat`; takes priority when set. |
+| `OPENAI_MODEL` | no | Defaults to `gpt-5-mini`. Override for another OpenAI model. |
+| `AGENTROUTER_API_KEY` | no | **Backend only.** Alternative provider key for the agent. |
+| `OPENROUTER_API_KEY` | no | **Backend only.** Alternative OpenRouter key for the agent. |
 
 `src/config/env.ts` validates all of this at import time and **exits** if anything is
 missing or malformed, reporting every problem at once. A blank value (`FOO=`) is
@@ -189,7 +192,7 @@ as a confusing 401 from Supabase. Only variable **names** are ever printed — n
 values.
 
 The three Razorpay variables are **all-or-none**: setting one or two is rejected at
-startup rather than producing a server that can create payment links but cannot verify
+startup rather than producing a server that can create a checkout session but cannot verify
 the webhooks confirming them. Omit all three and the server runs fine with payments
 disabled — the payment routes answer `501 PAYMENT_NOT_CONFIGURED`, naming the missing
 variables, and everything else works. Outside production, `RAZORPAY_KEY_ID` must begin

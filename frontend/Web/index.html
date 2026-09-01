@@ -3,21 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
-      content="Checkout Concierge - an AI-native commerce assistant. Conversation to verified payment, with every agent action auditable."
+      content="Mercora - make merchants AI-transactable. An AI shopping agent that proposes, a human who approves, and Razorpay that verifies. Every agent action is auditable."
     />
-    <title>Checkout Concierge</title>
+    <title>Mercora — Make merchants AI-transactable</title>
 
     <!--
-      Inter, with a system fallback that degrades cleanly offline (Segoe UI on
-      Windows, -apple-system on macOS). No JS font dependency.
+      Outfit is the single typeface of the Mercora system: geometric, digital-native,
+      and legible at the 11-12px label sizes this interface leans on. Loaded from
+      Google Fonts with `display=swap` so a blocked or slow font request renders the
+      local fallback stack immediately instead of holding the first paint hostage.
+      Weights are limited to the five the design system actually uses.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
@@ -39,6 +42,15 @@
     <link rel="preconnect" href="https://checkout.razorpay.com" crossorigin />
   </head>
   <body>
+    <!--
+      MERCORA — make merchants AI-transactable.
+      SYSTEM: Flat, bold, geometric, digital-native. Zero artificial depth: hierarchy
+      comes from size, spacing, colour blocking and typography, never from shadow.
+      STORY: Mercora proposed. You approved. Razorpay processed. The webhook verified.
+      The agent never spends money on its own - the approval gate is the product.
+      TOKENS: #FFFFFF canvas, #111827 ink, #3B82F6 primary, #10B981 verified,
+      #F59E0B test-mode, #F3F4F6 muted, #E5E7EB border, Outfit throughout.
+    -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

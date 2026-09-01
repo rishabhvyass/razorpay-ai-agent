@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
               <div>
                 <h1 className="text-ink text-sm font-semibold">The interface stopped rendering</h1>
                 <p className="text-muted mt-1 text-[13px] leading-relaxed">
-                  Something threw while drawing the page. No order and no payment was affected —
+                  Something threw while drawing the page. No order and no payment was affected.
                   this app never changes an order's status, and a crash cannot start a payment.
                 </p>
               </div>

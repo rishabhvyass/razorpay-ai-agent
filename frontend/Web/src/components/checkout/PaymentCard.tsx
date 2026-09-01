@@ -1,19 +1,11 @@
 import { useState } from 'react';
-import { CreditCard, Info, Link2 } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
-import { useCheckoutSession } from '@/hooks/useCheckoutSession';
 import { config } from '@/lib/config';
-import { describePurchase } from '@/lib/format';
 import { qk } from '@/lib/queryClient';
+import { refreshPaymentStatus, type PaymentView } from '@/services/paymentService';
 import {
-  refreshPaymentStatus,
-  requestPaymentLink,
-  type PaymentView,
-} from '@/services/paymentService';
-import {
-  Badge,
-  Button,
   Card,
   CardHeader,
   ErrorState,
@@ -48,13 +40,11 @@ export function PaymentCard({
   orderId,
   fallbackOrder,
   product,
-  fallbackPaymentUrl,
   onRefresh,
 }: {
   orderId: string;
   fallbackOrder?: Order;
   product?: Product | null;
-  fallbackPaymentUrl?: string | null;
   /**
    * Lets the parent re-read its own copy of the order alongside this card's poll.
    * The card owns `qk.orders.payment`; a page that also renders `qk.orders.detail`
@@ -62,37 +52,14 @@ export function PaymentCard({
    */
   onRefresh?: () => void;
 }) {
-  const session = useCheckoutSession();
   const payment = usePaymentStatus(orderId);
   const queryClient = useQueryClient();
 
-  const [simulateError, setSimulateError] = useState<unknown>(null);
-  const [simulating, setSimulating] = useState(false);
   const [reconcileError, setReconcileError] = useState<unknown>(null);
   const [reconciling, setReconciling] = useState(false);
-  const [linkError, setLinkError] = useState<unknown>(null);
-  const [linkRequesting, setLinkRequesting] = useState(false);
 
   const order = payment.data?.order ?? fallbackOrder;
-  const paymentUrl = payment.data?.paymentUrl ?? fallbackPaymentUrl ?? null;
-  // Whether a simulated payment actually exists for this order, which is not the
-  // same question as whether the app is in mock mode. Gating the settle controls on
-  // `config.useMock` offered them for orders that had no overlay at all, so pressing
-  // one asked the app to settle a payment nothing had initiated.
   const isMock = payment.data?.mock ?? false;
-
-  const simulate = async (outcome: 'success' | 'failure') => {
-    if (!order || simulating) return;
-    setSimulating(true);
-    setSimulateError(null);
-    try {
-      await session.simulate(order.id, outcome);
-    } catch (error) {
-      setSimulateError(error);
-    } finally {
-      setSimulating(false);
-    }
-  };
 
   /**
    * Ask the backend to read this payment's state from Razorpay and apply it.
@@ -112,9 +79,8 @@ export function PaymentCard({
    * the same row a beat later.
    */
   /**
-   * The one place a fresher payment view is written, shared by every path that
-   * produces one: the reconcile button, the payment-link request, and the verified
-   * response from the checkout modal.
+   * The one place a fresher payment view is written: the provider reconciliation
+   * action. The payment card itself never initiates a payment.
    *
    * Note what it is not. It does not set a status, or merge a status in - the whole
    * object is the backend's answer and this card renders it as given. A verified
@@ -146,46 +112,14 @@ export function PaymentCard({
   };
 
   /**
-   * A Razorpay checkout session was created, so the order row moved to
-   * PAYMENT_PENDING and gained a `razorpayOrderId` server-side. Refetch rather than
-   * write: the session response is not a payment view, and inventing one here would
-   * mean this card displaying a status no endpoint returned.
+   * A checkout session changes the order on the server to PAYMENT_PENDING. Re-read
+   * both caches instead of constructing a local payment view from the session response.
    */
   const sessionOpened = () => {
     if (!order) return;
     void queryClient.invalidateQueries({ queryKey: qk.orders.payment(order.id) });
     void queryClient.invalidateQueries({ queryKey: qk.orders.detail(order.id) });
     onRefresh?.();
-  };
-
-  /**
-   * The other payment method: ask the backend to issue a Razorpay Payment Link.
-   *
-   * Offered beside the checkout modal rather than instead of it, because the two are
-   * genuinely different products - a hosted page the customer can return to or
-   * forward, versus an in-page modal - and a customer whose browser blocks
-   * Razorpay's script still needs a way to pay.
-   *
-   * It is its own MONEY_ACTION with its own click, its own approval reason and its own
-   * audit row. Nothing is issued because an order exists; it is issued because
-   * someone pressed this.
-   */
-  const requestLink = async () => {
-    if (!order || linkRequesting) return;
-    setLinkRequesting(true);
-    setLinkError(null);
-    try {
-      applyView(
-        await requestPaymentLink(
-          order.id,
-          `Customer chose to pay ${order.amountFormatted} for ${describePurchase(order, product)} by Razorpay payment link.`,
-        ),
-      );
-    } catch (error) {
-      setLinkError(error);
-    } finally {
-      setLinkRequesting(false);
-    }
   };
 
   if (payment.isError && !order) {
@@ -212,101 +146,30 @@ export function PaymentCard({
     order.status === 'PAYMENT_EXPIRED' ||
     order.status === 'CANCELLED';
 
-  /**
-   * The preconditions both payment instruments share: a real payment provider, and an
-   * order that has not already settled either way.
-   *
-   * Mock mode is excluded outright. Standard Checkout means Razorpay's own modal
-   * collecting real card details against a real key, and there is no honest local
-   * stand-in for it - a simulated card form is exactly the fabricated payment screen
-   * this product must not contain.
-   */
-  const payable = !config.useMock && !isMock && !terminalPaid && !terminalFailed;
+  // The backend permits one provider instrument per order. Existing payment-link
+  // orders remain status-only; new orders get the single Standard Checkout action.
+  const canCheckout =
+    !config.useMock &&
+    !isMock &&
+    !terminalPaid &&
+    !terminalFailed &&
+    order.razorpayPaymentLinkId === null;
 
-  /**
-   * Which instruments are still available, mirroring the backend's own rule: an order
-   * binds exactly ONE payment instrument, first come wins. These conditions exist so
-   * the interface never renders a button whose only possible answer is 409.
-   *
-   * The two are not symmetrical, because the backend's two guards are not:
-   *
-   *   checkout  refused once a payment LINK id exists. A Razorpay order id is fine -
-   *             `POST /api/create-order` returns the existing session rather than
-   *             creating a second one, so pressing pay again after a dismissed modal
-   *             reopens the same payment instead of opening a way to be charged twice.
-   *   link      refused once EITHER id exists. There is nothing to re-issue and no
-   *             second instrument to add.
-   */
-  const canCheckout = payable && order.razorpayPaymentLinkId === null;
-  const canRequestLink =
-    payable && order.razorpayPaymentLinkId === null && order.razorpayOrderId === null;
-
-  const checkoutButton = canCheckout ? (
-    <RazorpayCheckoutButton
-      order={order}
-      product={product ?? null}
-      onSettled={applyView}
-      onSessionOpened={sessionOpened}
-    />
-  ) : null;
-
-  /**
-   * The secondary instrument, offered under the modal.
-   *
-   * Deliberately secondary and deliberately present. Secondary because paying in-page
-   * is fewer steps and does not lose the customer to another tab; present because
-   * Razorpay's script is a third-party CDN request that an extension or a corporate
-   * proxy can block, and "the pay button did nothing" must not be the end of the
-   * story. Each is its own approved, audited MONEY_ACTION.
-   */
-  const linkFallback = canRequestLink ? (
-    <div className="space-y-2">
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => void requestLink()}
-        loading={linkRequesting}
-        icon={<Link2 className="size-3.5" aria-hidden />}
-        fullWidth
-      >
-        Get a Razorpay payment link instead
-      </Button>
-      <p className="text-faint text-[11px] leading-relaxed">
-        Opens a Razorpay-hosted page in a new tab rather than a modal here. Useful if the checkout
-        script is blocked in this browser, or to pay later from a different device. Razorpay issues
-        the link server-side; this app never builds a payment URL.
-      </p>
-      {linkError ? <ErrorState error={linkError} compact /> : null}
-    </div>
-  ) : null;
-
-  /**
-   * Whichever instruments this order can still use, as one node.
-   *
-   * One node rather than two rendered separately, because the same pair belongs in two
-   * places - the PENDING_CONFIRMATION branch below, and inside `PaymentPending` for an
-   * order that reached ORDER_CREATED or PAYMENT_PENDING. Building it once is what stops
-   * those two surfaces from offering different options for the same order, which is how
-   * an order stuck at ORDER_CREATED after a failed provider call ended up with a retry
-   * button and no way to fall back to a link.
-   */
-  const instrumentChoice =
-    checkoutButton === null && linkFallback === null ? null : (
-      <div className="space-y-3">
-        {checkoutButton}
-        {linkFallback}
-      </div>
-    );
+  const paymentDescription = terminalPaid || terminalFailed
+    ? orderStatusMeaning(order.status)
+    : order.status === 'PENDING_CONFIRMATION'
+      ? 'No payment has been started.'
+      : 'Payment status is read from the backend.';
 
   return (
     <Card padded={false} className="overflow-hidden">
-      <div className="border-line flex items-start justify-between gap-3 border-b px-4 py-3">
+      <div className="border-line flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <CardHeader
           title="Payment"
-          description={orderStatusMeaning(order.status)}
+          description={paymentDescription}
           icon={<CreditCard className="size-4" aria-hidden />}
         />
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
           <OrderStatusBadge status={order.status} />
           {isMock ? <MockBadge /> : null}
         </div>
@@ -321,10 +184,10 @@ export function PaymentCard({
         {isMock ? ' This state came from the labelled simulation, not a verified payment.' : ''}
       </p>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-5 p-5">
         <OrderTotals order={order} product={product ?? null} />
 
-        <div className="border-line border-t pt-4">
+        <div className="border-line border-t pt-5">
           {terminalPaid ? (
             <PaymentSuccess
               order={order}
@@ -332,73 +195,55 @@ export function PaymentCard({
               isMock={isMock}
             />
           ) : terminalFailed ? (
-            <PaymentFailure
-              order={order}
-              reason={payment.data?.failureReason ?? null}
-              // The card's own poll is the query that feeds it, so a re-check has to
-              // refetch that. The parent-supplied refresh is additional, not instead:
-              // OrderDetailPage previously passed only its `qk.orders.detail` refetch,
-              // which is a different key from the `qk.orders.payment` rendered here, so
-              // pressing the button changed nothing visible on this card.
-              // In real mode a re-check asks Razorpay, not the database: the point of
-              // the button is the provider's verdict, and re-reading a row this app
-              // already polls every three seconds would tell the user nothing new. In
-              // mock mode there is no provider, so it refetches.
-              onRecheck={() => {
-                if (isMock) {
-                  void payment.refetch();
-                  onRefresh?.();
-                  return;
-                }
-                void reconcile();
-              }}
-              rechecking={reconciling}
-            />
-          ) : order.status === 'PENDING_CONFIRMATION' && !isMock ? (
-            // The order exists and no payment instrument is bound to it. In real mode
-            // that is not a dead end - it is the point at which the customer chooses
-            // how to pay, and each choice is its own explicitly-approved MONEY_ACTION.
-            // In mock mode there is no provider to choose, so it says so.
-            <div className="space-y-3">
-              <Badge tone="neutral" icon={<Info className="size-3" aria-hidden />}>
-                {instrumentChoice ? 'Payment not started' : 'No payment link issued'}
-              </Badge>
-              <p className="text-muted text-[13px] leading-relaxed">
-                The order is recorded in the database at{' '}
-                <code className="text-ink">PENDING_CONFIRMATION</code>.{' '}
-                {config.useMock
-                  ? 'No simulated payment link exists for it in this browser — the local overlay was reset, or the order was created before it. Nothing was charged, and there is no payment here to settle.'
-                  : instrumentChoice
-                    ? 'Nothing has been charged and no payment has been started. Razorpay is contacted only when one of the options below is pressed, and the backend records that approval before it does.'
-                    : 'No Razorpay payment instrument has been issued against it, so nothing has been charged. One is only created when a purchase is explicitly authorised, and the backend refuses to issue one without that approval.'}
-              </p>
-              {instrumentChoice}
-            </div>
+            <>
+              <PaymentFailure
+                order={order}
+                reason={payment.data?.failureReason ?? null}
+                // The card's own poll is the query that feeds it, so a re-check has to
+                // refetch that. The parent-supplied refresh is additional, not instead:
+                // OrderDetailPage previously passed only its `qk.orders.detail` refetch,
+                // which is a different key from the `qk.orders.payment` rendered here, so
+                // pressing the button changed nothing visible on this card.
+                // In real mode a re-check asks Razorpay, not the database: the point of
+                // the button is the provider's verdict, and re-reading a row this app
+                // already polls every three seconds would tell the user nothing new. In
+                // mock mode there is no provider, so it refetches.
+                onRecheck={() => {
+                  if (isMock) {
+                    void payment.refetch();
+                    onRefresh?.();
+                    return;
+                  }
+                  void reconcile();
+                }}
+                rechecking={reconciling}
+              />
+              {reconcileError ? <ErrorState error={reconcileError} compact /> : null}
+            </>
           ) : (
-            <PaymentPending
-              order={order}
-              paymentUrl={paymentUrl}
-              isMock={isMock}
-              // Only when this order can actually use one. `PaymentPending` prefers a
-              // provider-issued link when one exists, so passing this alongside would
-              // offer two instruments for an order the backend allows exactly one of.
-              {...(instrumentChoice === null ? {} : { checkout: instrumentChoice })}
-              simulateError={simulateError}
-              simulating={simulating}
-              {...(isMock ? { onSimulate: (outcome) => void simulate(outcome) } : {})}
-              {...(isMock || config.useMock
-                ? {}
-                : {
-                    onReconcile: () => void reconcile(),
-                    reconciling,
-                    reconcileError,
-                  })}
-            />
+            <div className="space-y-5">
+              {canCheckout ? (
+                <RazorpayCheckoutButton
+                  order={order}
+                  product={product ?? null}
+                  onSettled={applyView}
+                  onSessionOpened={sessionOpened}
+                />
+              ) : null}
+              <PaymentPending order={order} />
+            </div>
           )}
         </div>
 
-        <div className="border-line border-t pt-4">
-          <OrderIdentifiers order={order} />
+        <div className="border-line border-t pt-5">
+          <details className="group">
+            <summary className="text-muted hover:text-ink motion-fast cursor-pointer list-none text-[12px] font-semibold transition-colors">
+              Order details
+            </summary>
+            <div className="pt-3">
+              <OrderIdentifiers order={order} />
+            </div>
+          </details>
         </div>
       </div>
     </Card>

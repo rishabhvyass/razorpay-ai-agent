@@ -52,7 +52,7 @@ export function formatRelative(iso: string): string {
  * still read it, and copy actions always copy the full string.
  */
 export function truncateId(id: string | null | undefined, head = 12, tail = 4): string {
-  if (!id) return '—';
+  if (!id) return 'Not available';
   if (id.length <= head + tail + 1) return id;
   return `${id.slice(0, head)}…${id.slice(-tail)}`;
 }

@@ -42,8 +42,8 @@ const FLOW_STEPS = [
   {
     icon: CreditCard,
     actor: 'RAZORPAY GATEWAY',
-    action: 'Payment Link Issued & Captured',
-    detail: 'User completes payment via UPI / QR / Netbanking on test mode sandbox',
+    action: 'Standard Checkout Modal & Capture',
+    detail: 'User completes payment inside Razorpay Standard Checkout on the test-mode sandbox',
     badge: 'Step 5',
   },
   {

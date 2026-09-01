@@ -37,7 +37,6 @@ import {
   getUserId,
   setUserId,
 } from '@/lib/session';
-import { hasMockPayments, resetMockPayments } from '@/services/mock/mockPayments';
 
 /** Postgres `uuid` shape. A wrong-shaped id fails the profiles foreign key server-side. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -96,7 +95,6 @@ export function SettingsPage() {
    */
   const resetLocalState = () => {
     clearRecordedOrderIds();
-    resetMockPayments();
     session.reset();
     setResetOpen(false);
   };
@@ -128,7 +126,7 @@ export function SettingsPage() {
                 title="Connection"
                 description={
                   config.apiUrl === ''
-                    ? 'Same origin — the Vite dev server proxies /api and /health to localhost:3000.'
+                    ? 'Same origin. The Vite dev server proxies /api and /health to localhost:3000.'
                     : 'Set through VITE_API_URL.'
                 }
                 icon={<Database className="size-4" aria-hidden />}
@@ -163,7 +161,7 @@ export function SettingsPage() {
                     {health.error instanceof Error ? health.error.message : 'No response'}
                   </span>
                 ) : (
-                  <span className="text-faint">—</span>
+                  <span className="text-faint">Not available</span>
                 )}
               </Row>
               {health.data?.service ? (
@@ -208,9 +206,9 @@ export function SettingsPage() {
             <div className="border-line border-t px-4 py-3">
               <p className="text-muted text-[12px] leading-relaxed">
                 This frontend does not implement either of them. It does not call Claude, Razorpay or
-                Supabase directly, and it does not construct payment URLs. Where a route is missing,
+                Supabase directly, and it does not construct payment data. Where a route is missing,
                 the affected surface either says so or is served by the clearly-labelled mock
-                adapter below — never by silently invented data.
+                adapter below. Never by silently invented data.
               </p>
             </div>
           </Card>
@@ -247,28 +245,28 @@ export function SettingsPage() {
                     <Row label="Real">
                       <span className="text-ink">
                         Products, conversations, messages, order creation, order reads, activity
-                        trail — all Postgres rows through the backend.
+                        trail. All Postgres rows come through the backend.
                       </span>
                     </Row>
                     <Row label="Simulated">
                       <span className="text-ink">
-                        Agent reasoning and replies; Razorpay order id, payment link and the
-                        pending → paid/failed transition.
+                        Agent reasoning and replies; Razorpay order state and the pending →
+                        paid/failed transition.
                       </span>
                     </Row>
                   </dl>
                   <MockNotice>
-                    Mock mode is force-disabled in production builds regardless of this flag —
+                    Mock mode is force-disabled in production builds regardless of this flag.
                     fabricated payment data reaching a real deployment is exactly what the product
                     principle forbids.
                   </MockNotice>
                 </>
               ) : (
                 <p className="text-muted text-[13px] leading-relaxed">
-                  Nothing on screen is simulated. The chat and the payment states will show their
-                  not-implemented states instead, because the endpoints behind them do not exist
-                  yet. Set <code className="text-ink">VITE_USE_MOCK=true</code> to walk the full
-                  flow with the labelled adapter.
+                  Nothing on screen is simulated. Chat uses the configured backend AI provider and
+                  payments use Razorpay Standard Checkout. Set{' '}
+                  <code className="text-ink">VITE_USE_MOCK=true</code> only when you explicitly
+                  want the labelled local adapter.
                 </p>
               )}
             </div>
@@ -294,7 +292,7 @@ export function SettingsPage() {
                     </span>
                   ) : (
                     <>
-                      Optional, and empty is valid — <code>POST /api/orders</code> accepts a null
+                      Optional, and empty is valid. <code>POST /api/orders</code> accepts a null
                       user id. Paste the UUID of a row that exists in <code>profiles</code> to send
                       it with new orders and to load a real history from{' '}
                       <code>GET /api/users/:userId/orders</code>.
@@ -370,7 +368,7 @@ export function SettingsPage() {
         {/* ------------------------------------------------------------------ */}
         <Section
           title="This browser's session"
-          description="Identifiers only — never prices, amounts or statuses"
+          description="Identifiers only. Never prices, amounts, or statuses."
         >
           <Card padded={false}>
             <dl className="divide-line divide-y text-[13px]">
@@ -389,11 +387,11 @@ export function SettingsPage() {
                     <span className="text-success">Being recorded by the backend</span>
                   ) : (
                     <span className="text-warning">
-                      Not persisted — the backend could not record it
+                      Not persisted. The backend could not record it.
                     </span>
                   )
                 ) : (
-                  <span className="text-faint">—</span>
+                  <span className="text-faint">Not available</span>
                 )}
               </Row>
               <Row label="Recorded order ids">
@@ -401,7 +399,7 @@ export function SettingsPage() {
                   {orderIds.length} {orderIds.length === 1 ? 'order' : 'orders'}
                   {orderIds.length > 0 ? (
                     <>
-                      {' — '}
+                      {' '}
                       <Link to="/orders" className="text-accent font-medium">
                         view them
                       </Link>
@@ -409,13 +407,6 @@ export function SettingsPage() {
                   ) : null}
                 </span>
               </Row>
-              {config.useMock ? (
-                <Row label="Simulated payment overlay">
-                  <span className="text-ink">
-                    {hasMockPayments() ? 'Present for this session' : 'Empty'}
-                  </span>
-                </Row>
-              ) : null}
               <Row label="Stored where">
                 <span className="text-muted">
                   <code className="text-ink">sessionStorage</code> for the conversation id,{' '}
@@ -452,11 +443,13 @@ export function SettingsPage() {
                 <p className="text-muted text-[13px] leading-relaxed">
                   Vite inlines every <code className="text-ink">VITE_</code> variable into the
                   bundle, so the browser can read anything declared that way. This app declares
-                  exactly two — the API origin and the mock flag — and both are public by design.
+                  exactly three public values: the API origin, the mock flag and the Razorpay
+                  publishable key id.
                   These stay server-side and have no reader in this codebase:
                 </p>
                 <ul className="grid gap-1.5 sm:grid-cols-2">
                   {[
+                    'OPENAI_API_KEY',
                     'AGENTROUTER_API_KEY',
                     'ANTHROPIC_API_KEY',
                     'RAZORPAY_KEY_SECRET',
@@ -471,7 +464,7 @@ export function SettingsPage() {
                 </ul>
                 <p className="text-muted text-[13px] leading-relaxed">
                   Nor does this app trust its own values for anything financial. Amounts, order
-                  status and payment status are only ever displayed as the backend returned them —
+                  status and payment status are only ever displayed as the backend returned them.
                   there is no client-side code that computes a price or sets a payment state. JSON
                   payloads in the activity trail are passed through a redaction step before they
                   reach the DOM.

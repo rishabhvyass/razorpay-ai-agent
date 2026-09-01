@@ -1,18 +1,15 @@
 /**
  * Chat view model.
  *
- * `POST /api/chat` does not exist yet - the backend's own route index lists it
- * under `notImplementedYet`, pending the Claude + MCP layer. So this file defines
- * the *contract the UI codes against*, not a description of something that
- * already runs.
+ * This file defines the structured contract returned by the backend agent route.
  *
  * Two consequences, both deliberate:
  *
  *   1. A chat turn is a text body plus zero or more typed `blocks`. Rich content
  *      (a product, a confirmation gate, a payment card) is structured data the
  *      renderer switches on - never HTML or markdown smuggled through `content`.
- *      When the real endpoint lands it needs to return this shape, and nothing in
- *      components/chat changes.
+ *      The backend returns this shape, and nothing in components/chat needs to
+ *      know which provider answered.
  *
  *   2. Every turn carries `mock`. A mocked turn renders a visible marker. There
  *      is no way to display fabricated agent output that looks identical to real
@@ -62,13 +59,13 @@ export interface ChatTurn {
   failed?: boolean;
 }
 
-/** What `POST /api/chat` will accept once it exists. */
+/** What `POST /api/chat` accepts. */
 export interface ChatRequest {
   conversationId: string;
   message: string;
 }
 
-/** What `POST /api/chat` will return. */
+/** What `POST /api/chat` returns. */
 export interface ChatResponse {
   turns: ChatTurn[];
   /** Actions the agent recorded while producing these turns. */

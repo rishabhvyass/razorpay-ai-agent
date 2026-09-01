@@ -52,65 +52,73 @@ export function PaymentFailure({
   const presentation = ORDER_STATUS_PRESENTATION[order.status];
 
   return (
-    <div className="space-y-3.5">
-      <div className="flex items-center gap-2">
-        <span className="bg-danger-bg border-danger-line grid size-8 shrink-0 place-items-center rounded-full border">
-          <AlertCircle className="text-danger size-4" aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <p className="text-ink text-sm font-semibold">Payment wasn&apos;t completed</p>
-          <p className="text-muted text-[12px]">
-            {formatMinor(order.amount, order.currency)} was not collected
+    <div className="space-y-5">
+      {/* Red block, stated plainly. A failure that looks like a warning invites the
+          reader to wonder whether the money left anyway.
+
+          Spec section 27: it settles in on the same curve and the same 260ms as the
+          success block, and then holds absolutely still. No shake, no shudder, no
+          attention loop - the card is bad news being read carefully, and motion that
+          performs alarm would make a calm, accurate statement feel like a system
+          malfunction. The icon does not pulse either: nothing here is in progress. */}
+      <div className="rounded-card bg-danger-bg animate-scale-in overflow-hidden">
+        <div className="bg-danger flex items-center gap-2 px-5 py-2.5 text-white">
+          <AlertCircle className="size-4 shrink-0" strokeWidth={2.5} aria-hidden />
+          <h3 className="text-[11px] font-bold tracking-[0.1em] uppercase">Payment not verified</h3>
+        </div>
+
+        <div className="p-5">
+          <p className="text-ink text-[17px] leading-tight font-extrabold tracking-[-0.02em]">
+            Nothing was charged
           </p>
+          <p className="text-muted mt-2 text-[13px] leading-relaxed">
+            {formatMinor(order.amount, order.currency)} was not collected. Razorpay did not verify a
+            payment for this order, and no successful payment is recorded against it.{' '}
+            {reason ?? presentation.meaning}
+          </p>
+
+          <div className="border-danger-line mt-4 border-t pt-4">
+            <PaymentSteps order={order} />
+          </div>
         </div>
       </div>
 
-      <PaymentSteps order={order} />
-
-      <div className="rounded-control border-line bg-surface-sunken border px-3 py-2.5">
-        <p className="text-muted text-xs leading-relaxed">
-          The payment was not verified by Razorpay. No successful payment was recorded.{' '}
-          <strong className="text-ink font-semibold">Nothing was charged.</strong>{' '}
-          {reason ?? presentation.meaning}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2.5 sm:flex-row">
         {onRecheck ? (
           <Button
             variant="secondary"
-            size="md"
+            size="lg"
             onClick={onRecheck}
             loading={rechecking}
-            icon={<RefreshCw className="size-3.5" aria-hidden />}
+            icon={<RefreshCw className="size-4" aria-hidden />}
             className="sm:flex-1"
           >
             Check status again
           </Button>
         ) : null}
         <Link to="/products" className="sm:flex-1">
-          <Button variant="secondary" size="md" fullWidth>
+          <Button variant="secondary" size="lg" fullWidth>
             Browse other products
           </Button>
         </Link>
       </div>
 
-      <div className="rounded-control border-line bg-surface-sunken flex items-start gap-2.5 border px-3 py-2.5">
-        <Info className="text-muted mt-0.5 size-3.5 shrink-0" aria-hidden />
-        <p className="text-muted text-xs leading-relaxed">
-          There is no <strong className="text-ink font-semibold">Cancel order</strong> action here
+      <div className="rounded-control border-line bg-surface-sunken flex items-start gap-2.5 border px-4 py-3">
+        <Info className="text-muted mt-0.5 size-4 shrink-0" aria-hidden />
+        <p className="text-muted text-[12px] leading-relaxed">
+          There is no <strong className="text-ink font-bold">Cancel order</strong> action here
           because the backend exposes no endpoint to cancel one. This order stays as{' '}
           <code className="text-ink">{order.status}</code> in the database until a cancel route
-          exists — no button is shown that would only pretend to change it.
+          exists. No button is shown that would only pretend to change it.
         </p>
       </div>
 
       <div className="flex items-center gap-2">
         <Badge tone="neutral">No retry was made automatically</Badge>
       </div>
-      <p className="text-faint text-[11px] leading-relaxed">
+      <p className="text-faint text-[11.5px] leading-relaxed">
         A failed payment is never retried on your behalf. Retrying is a money action, so it needs
-        your authorisation like any other — which is why the only button here re-reads the status
+        your authorisation like any other. This is why the only button here re-reads the status
         rather than attempting a second payment. To buy this again, start a fresh authorisation.
       </p>
     </div>

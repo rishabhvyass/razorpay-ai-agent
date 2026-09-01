@@ -1,21 +1,17 @@
 /**
  * Chat.
  *
- * `POST /api/chat` DOES NOT EXIST YET. The backend's route index lists it under
- * `notImplementedYet` pending the Claude + MCP layer.
+ * `POST /api/chat` is served by the configured backend AI provider and commerce-tool loop.
  *
  * This module is the seam. It defines the typed call the UI makes, and routes it
  * to one of two places:
  *
- *   VITE_USE_MOCK=false  ->  the real endpoint. If the backend has not shipped it,
- *                            the caller gets a ROUTE_NOT_FOUND ApiError, which the
- *                            chat UI renders as "this endpoint is not implemented
- *                            yet" - an honest failure, not a fabrication.
+ *   VITE_USE_MOCK=false  ->  the real endpoint. Provider/configuration failures stay
+ *                            visible as backend errors with their request id.
  *
  *   VITE_USE_MOCK=true   ->  services/mock/mockAgent, which searches the REAL
  *                            catalogue and returns turns flagged `mock: true`.
  *
- * When the backend ships the endpoint, flipping the flag is the entire migration.
  * Nothing in components/chat knows which side answered.
  */
 
@@ -48,6 +44,13 @@ export interface SendMessageArgs {
    */
   declaredIntent?: 'buy';
   /**
+   * Units requested by the control that produced this message - the product page's
+   * quantity stepper. Same standing as `declaredIntent`: mock-only, provenance rather
+   * than permission. The real endpoint reads the quantity from the sentence and its own
+   * conversation state, so the message text names it too.
+   */
+  declaredQuantity?: number;
+  /**
    * Progress reporting for the UI's loading copy. Only the mock can populate it:
    * `POST /api/chat` is one opaque round trip, so in real mode the phase stays
    * 'thinking' rather than the UI inventing steps it cannot observe.
@@ -62,6 +65,7 @@ export async function sendMessage(args: SendMessageArgs): Promise<ChatResponse> 
       message: args.message,
       standingProduct: args.standingProduct ?? null,
       ...(args.declaredIntent ? { declaredIntent: args.declaredIntent } : {}),
+      ...(args.declaredQuantity !== undefined ? { declaredQuantity: args.declaredQuantity } : {}),
       ...(args.onPhase ? { onPhase: args.onPhase } : {}),
     });
   }
@@ -81,12 +85,10 @@ export async function sendMessage(args: SendMessageArgs): Promise<ChatResponse> 
 /**
  * Whether the chat endpoint is expected to work at all.
  *
- * Used by the chat UI to decide between rendering the composer and rendering a
- * "not implemented" notice, rather than letting the user type into an input whose
- * submit can only ever 404.
+ * Used by the chat UI to keep the availability decision in one place.
  */
 export function isChatAvailable(): boolean {
-  return config.useMock || !config.isDev;
+  return true;
 }
 
 /** True when a failure means "the route isn't built" rather than "it broke". */

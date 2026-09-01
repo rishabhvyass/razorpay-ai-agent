@@ -1,6 +1,7 @@
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format';
+import { useChangeCount } from '@/hooks/useChangeCount';
 import type { Order, OrderStatus } from '@/types';
 
 type StepState = 'done' | 'current' | 'upcoming' | 'failed';
@@ -25,8 +26,8 @@ const HAPPY_PATH: Array<{ status: OrderStatus; label: string; detail: string }> 
   },
   {
     status: 'PAYMENT_PENDING',
-    label: 'Payment link issued',
-    detail: 'Waiting on the customer. The provider owns this step, not this app.',
+    label: 'Payment initiated',
+    detail: 'Waiting for the provider to confirm the payment. The provider owns this step, not this app.',
   },
   {
     status: 'PAID',
@@ -54,8 +55,8 @@ const FAILURE_LABEL: Partial<Record<OrderStatus, { label: string; detail: string
     detail: 'The provider did not capture the payment. Nothing was charged.',
   },
   PAYMENT_EXPIRED: {
-    label: 'Payment link expired',
-    detail: 'The link lapsed before it was used. Nothing was charged.',
+    label: 'Payment expired',
+    detail: 'The payment attempt expired before it was completed. Nothing was charged.',
   },
   CANCELLED: {
     label: 'Cancelled',
@@ -100,6 +101,100 @@ function buildSteps(status: OrderStatus): Step[] {
   return steps;
 }
 
+/**
+ * One step, which knows whether it just moved.
+ *
+ * Split out of the map so it can hold that one piece of state. Spec section 31: a step
+ * that becomes complete while the page is open draws its mark; a page that loads on a
+ * PAID order shows four settled ticks and animates none of them. The order row is the
+ * only input - `useChangeCount` is watching a value derived from `order.status`, so
+ * nothing here can mark a step ahead of the backend.
+ */
+function TimelineStep({
+  step,
+  isLast,
+  stamp,
+}: {
+  step: Step;
+  isLast: boolean;
+  /** The row's own `updatedAt`, on the furthest step the order actually reached. */
+  stamp: string | null;
+}) {
+  const changes = useChangeCount(step.state);
+
+  return (
+    <li className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span
+          className={cn(
+            'motion-fast grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
+            step.state === 'done' && 'border-success bg-success text-white',
+            step.state === 'current' && 'border-accent bg-accent-50',
+            step.state === 'upcoming' && 'border-line-strong bg-surface',
+            step.state === 'failed' && 'border-danger bg-danger text-white',
+          )}
+          aria-hidden
+        >
+          {step.state === 'done' ? (
+            <Check
+              key={changes}
+              className={cn('size-3', changes > 0 && 'animate-check-draw')}
+              strokeWidth={3}
+            />
+          ) : step.state === 'failed' ? (
+            <X
+              key={changes}
+              className={cn('size-3', changes > 0 && 'animate-check-pop')}
+              strokeWidth={3}
+            />
+          ) : step.state === 'current' ? (
+            <span className="bg-accent animate-pulse-soft size-1.5 rounded-full" />
+          ) : null}
+        </span>
+        {!isLast ? (
+          <span
+            className={cn(
+              'motion-normal w-0.5 flex-1 transition-colors',
+              step.state === 'done' ? 'bg-success/40' : 'bg-line',
+            )}
+            aria-hidden
+          />
+        ) : null}
+      </div>
+
+      <div className={cn('min-w-0 flex-1', isLast ? 'pb-0' : 'pb-5')}>
+        <p
+          className={cn(
+            'motion-fast text-[13px] leading-5 font-medium transition-colors',
+            step.state === 'upcoming' ? 'text-faint' : 'text-ink',
+          )}
+        >
+          {step.label}
+          {/* The state is carried visually by an icon and a colour. Spec
+              section 37 forbids leaning on colour alone, so it is also
+              written out for assistive tech. */}
+          <span className="sr-only">
+            {step.state === 'done'
+              ? ' Complete'
+              : step.state === 'current'
+                ? ' In progress'
+                : step.state === 'failed'
+                  ? ' Failed'
+                  : ' Not reached'}
+          </span>
+        </p>
+        <p className="text-muted mt-0.5 text-xs leading-relaxed">{step.detail}</p>
+        {stamp ? (
+          <p className="text-faint nums mt-1 text-[11px]">
+            {/* The row's own timestamp - the backend's record, not a client clock. */}
+            {formatDateTime(stamp)}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
 export function OrderTimeline({ order }: { order: Order }) {
   const steps = buildSteps(order.status);
 
@@ -114,73 +209,14 @@ export function OrderTimeline({ order }: { order: Order }) {
 
   return (
     <ol className="space-y-0">
-      {steps.map((step, index) => {
-        const isLast = index === steps.length - 1;
-
-        return (
-          <li key={step.key} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <span
-                className={cn(
-                  'grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
-                  step.state === 'done' && 'border-success bg-success text-white',
-                  step.state === 'current' && 'border-accent bg-accent-50',
-                  step.state === 'upcoming' && 'border-line-strong bg-surface',
-                  step.state === 'failed' && 'border-danger bg-danger text-white',
-                )}
-                aria-hidden
-              >
-                {step.state === 'done' ? (
-                  <Check className="size-3" strokeWidth={3} />
-                ) : step.state === 'failed' ? (
-                  <X className="size-3" strokeWidth={3} />
-                ) : step.state === 'current' ? (
-                  <span className="bg-accent animate-pulse-soft size-1.5 rounded-full" />
-                ) : null}
-              </span>
-              {!isLast ? (
-                <span
-                  className={cn(
-                    'w-0.5 flex-1',
-                    step.state === 'done' ? 'bg-success/40' : 'bg-line',
-                  )}
-                  aria-hidden
-                />
-              ) : null}
-            </div>
-
-            <div className={cn('min-w-0 flex-1', isLast ? 'pb-0' : 'pb-5')}>
-              <p
-                className={cn(
-                  'text-[13px] leading-5 font-medium',
-                  step.state === 'upcoming' ? 'text-faint' : 'text-ink',
-                )}
-              >
-                {step.label}
-                {/* The state is carried visually by an icon and a colour. Spec
-                    section 37 forbids leaning on colour alone, so it is also
-                    written out for assistive tech. */}
-                <span className="sr-only">
-                  {step.state === 'done'
-                    ? ' — complete'
-                    : step.state === 'current'
-                      ? ' — in progress'
-                      : step.state === 'failed'
-                        ? ' — failed'
-                        : ' — not reached'}
-                </span>
-              </p>
-              <p className="text-muted mt-0.5 text-xs leading-relaxed">{step.detail}</p>
-              {index === stampIndex ? (
-                <p className="text-faint nums mt-1 text-[11px]">
-                  {/* The row's own timestamp - the backend's record, not a client clock. */}
-                  {formatDateTime(order.updatedAt)}
-                </p>
-              ) : null}
-            </div>
-          </li>
-        );
-      })}
+      {steps.map((step, index) => (
+        <TimelineStep
+          key={step.key}
+          step={step}
+          isLast={index === steps.length - 1}
+          stamp={index === stampIndex ? order.updatedAt : null}
+        />
+      ))}
     </ol>
   );
 }

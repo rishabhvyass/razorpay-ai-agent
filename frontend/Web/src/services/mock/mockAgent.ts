@@ -180,6 +180,17 @@ export async function mockChat(args: {
    * moves no money, exactly as when the user types "yes, buy it".
    */
   declaredIntent?: 'buy';
+  /**
+   * How many units the control asked for. Same standing as `declaredIntent`: a fact
+   * about what the user did, consumed only here, and no kind of permission - the buy
+   * branch still returns an authorisation card and still creates nothing.
+   *
+   * It exists because the product page has a quantity stepper. A stepper whose value
+   * were dropped on the way here would show the user one number and hand the
+   * authorisation card another, and the number on that card is the one they are
+   * approving.
+   */
+  declaredQuantity?: number;
 }): Promise<ChatResponse> {
   await wait(THINK_MS);
 
@@ -213,22 +224,35 @@ export async function mockChat(args: {
     }
 
     const product = args.standingProduct;
+    // Clamped and truncated here rather than trusted: it arrives from a control, but
+    // the amount on the authorisation card is computed from it.
+    const quantity = Math.max(1, Math.trunc(args.declaredQuantity ?? 1));
 
-    if (product.stock < 1) {
+    if (product.stock < quantity) {
+      const outOfStock = product.stock < 1;
       return {
         mock: true,
         turns: [
-          assistantTurn(`${product.name} is out of stock, so I can't start a purchase for it.`, {
-            failed: true,
-            blocks: [
-              {
-                kind: 'error',
-                code: 'PRODUCT_UNAVAILABLE',
-                message: `${product.name} is out of stock.`,
-                hint: 'Ask me for an alternative and I will search again.',
-              },
-            ],
-          }),
+          assistantTurn(
+            outOfStock
+              ? `${product.name} is out of stock, so I can't start a purchase for it.`
+              : `I can't start a purchase for ${quantity} × ${product.name}. Only ${product.stock} in stock.`,
+            {
+              failed: true,
+              blocks: [
+                {
+                  kind: 'error',
+                  code: outOfStock ? 'PRODUCT_UNAVAILABLE' : 'INSUFFICIENT_STOCK',
+                  message: outOfStock
+                    ? `${product.name} is out of stock.`
+                    : `Requested ${quantity}, ${product.stock} available.`,
+                  hint: outOfStock
+                    ? 'Ask me for an alternative and I will search again.'
+                    : 'Lower the quantity, or ask me for an alternative.',
+                },
+              ],
+            },
+          ),
         ],
         actions: [
           mockAction({
@@ -236,7 +260,7 @@ export async function mockChat(args: {
             actionType: 'READ_ACTION',
             reason: 'User approved a purchase; verifying availability before any money action.',
             status: 'blocked',
-            input: { productId: product.id },
+            input: { productId: product.id, quantity },
             output: { stock: product.stock },
           }),
         ],
@@ -253,8 +277,8 @@ export async function mockChat(args: {
               {
                 kind: 'purchase-confirmation',
                 product,
-                quantity: 1,
-                amountMinor: product.price,
+                quantity,
+                amountMinor: product.price * quantity,
                 currency: product.currency,
               },
             ],
@@ -275,7 +299,7 @@ export async function mockChat(args: {
           actionType: 'MONEY_ACTION',
           reason: 'A money action requires explicit user authorisation before it can proceed.',
           status: 'started',
-          input: { productId: product.id, quantity: 1 },
+          input: { productId: product.id, quantity },
         }),
       ],
     };
@@ -375,17 +399,11 @@ export async function mockChat(args: {
   };
 }
 
-/** Activity entries for the approval -> order -> link sequence. */
+/** Activity entries for the approval -> order sequence. */
 export function mockApprovalActions(args: {
   productName: string;
   orderId: string;
-  /** Null when the simulated provider issued nothing. */
-  razorpayOrderId: string | null;
-  /** Null when no link was issued - the link step is then recorded as failed. */
-  paymentLinkId: string | null;
 }): AgentAction[] {
-  const linkIssued = args.paymentLinkId !== null;
-
   return [
     mockAction({
       toolName: 'purchase_approved',
@@ -400,62 +418,7 @@ export function mockApprovalActions(args: {
       actionType: 'MONEY_ACTION',
       reason: 'Approved purchase; recording the order.',
       status: 'success',
-      output: { orderId: args.orderId, razorpayOrderId: args.razorpayOrderId },
-    }),
-    mockAction({
-      toolName: 'create_payment_link',
-      actionType: 'MONEY_ACTION',
-      reason: 'Order created; issuing a payment link for the user to complete.',
-      status: linkIssued ? 'success' : 'failed',
-      output: { paymentLinkId: args.paymentLinkId },
-    }),
-    // Only claim we are waiting on a confirmation if something was actually
-    // issued to confirm. Otherwise the trail shows a payment in flight that
-    // nothing is going to settle.
-    ...(linkIssued
-      ? [
-          mockAction({
-            toolName: 'payment_pending',
-            actionType: 'SYSTEM_ACTION',
-            reason: 'Waiting for a signature-verified payment confirmation.',
-            status: 'started',
-          }),
-        ]
-      : []),
-  ];
-}
-
-/** Activity entries for the webhook settling. */
-export function mockSettlementActions(args: {
-  outcome: 'success' | 'failure';
-  paymentId: string | null;
-}): AgentAction[] {
-  if (args.outcome === 'failure') {
-    return [
-      mockAction({
-        toolName: 'payment_verification',
-        actionType: 'SYSTEM_ACTION',
-        reason: 'Provider reported the payment was not captured.',
-        status: 'failed',
-        output: { verified: false },
-      }),
-    ];
-  }
-
-  return [
-    mockAction({
-      toolName: 'payment_verified',
-      actionType: 'SYSTEM_ACTION',
-      reason: 'Webhook signature verified; payment captured.',
-      status: 'success',
-      output: { paymentId: args.paymentId },
-    }),
-    mockAction({
-      toolName: 'order_completed',
-      actionType: 'WRITE_ACTION',
-      reason: 'Verified payment; order marked PAID.',
-      status: 'success',
-      output: { status: 'PAID' },
+      output: { orderId: args.orderId },
     }),
   ];
 }

@@ -70,6 +70,7 @@ export function ProductsPage() {
           isPending={products.isPending}
           error={products.error}
           onRetry={() => void products.refetch()}
+          linkTo={(product) => `/products/${product.id}`}
           emptyAction={
             <Button size="sm" variant="secondary" onClick={() => setFilters(EMPTY_FILTERS)}>
               Clear filters
@@ -80,15 +81,12 @@ export function ProductsPage() {
               size="sm"
               variant="secondary"
               fullWidth
-              disabled={product.stock < 1}
-              onClick={() =>
-                // Browsing hands off to the conversation rather than starting a
-                // purchase. The authorisation step is not optional, and it lives in
-                // the chat.
-                void navigate('/checkout')
-              }
+              onClick={() => void navigate(`/products/${product.id}`)}
             >
-              {product.stock < 1 ? 'Out of stock' : 'Buy via the agent'}
+              {/* Browsing never starts a purchase. It opens the product, where the
+                  buy action hands off to the conversation - and the authorisation step
+                  in the conversation is not optional. */}
+              {product.stock < 1 ? 'View (out of stock)' : 'View product'}
             </Button>
           )}
         />

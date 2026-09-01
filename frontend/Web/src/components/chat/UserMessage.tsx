@@ -17,13 +17,13 @@ export function UserMessage({ turn }: { turn: ChatTurn }) {
       label="Your message"
       createdAt={turn.createdAt}
       avatar={
-        <span className="border-line bg-surface-sunken text-muted mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border">
-          <User className="size-3.5" aria-hidden />
+        <span className="bg-surface-sunken text-muted mt-0.5 grid size-7 shrink-0 place-items-center rounded-control">
+          <User className="size-3.5" strokeWidth={2.25} aria-hidden />
         </span>
       }
     >
       {turn.content ? (
-        <MessageBubble className="bg-accent text-white">{turn.content}</MessageBubble>
+        <MessageBubble className="bg-brand-blue text-white">{turn.content}</MessageBubble>
       ) : null}
     </MessageShell>
   );

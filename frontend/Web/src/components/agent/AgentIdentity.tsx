@@ -41,7 +41,7 @@ export function AgentIdentity() {
     <div className="flex items-center gap-2">
       <span
         className={cn(
-          'grid size-7 shrink-0 place-items-center rounded-full border',
+          'grid size-7 shrink-0 place-items-center rounded-control border',
           working ? 'bg-accent-50 border-accent-100' : 'border-line bg-surface-sunken',
         )}
         aria-hidden
@@ -79,7 +79,7 @@ export function AgentIdentity() {
               () => setCopied(false),
             );
           }}
-          className="border-line bg-surface-sunken text-muted hover:text-ink hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors lg:inline-flex"
+          className="border-line bg-surface-sunken text-muted hover:text-ink hidden shrink-0 items-center gap-1.5 border px-2.5 py-1 font-mono text-[11px] transition-colors lg:inline-flex"
         >
           {truncateId(session.conversationId, 10, 4)}
           <Copy
@@ -93,7 +93,7 @@ export function AgentIdentity() {
       ) : (
         // Not a blank space: no conversation id means POST /api/conversations did not
         // succeed, so this transcript exists only in this tab.
-        <span className="border-line bg-surface-sunken text-faint hidden shrink-0 rounded-full border px-2.5 py-1 text-[11px] lg:inline">
+        <span className="border-line bg-surface-sunken text-faint hidden shrink-0 border px-2.5 py-1 text-[11px] lg:inline">
           {session.transcriptRecording ? 'No conversation yet' : 'Transcript not recorded'}
         </span>
       )}

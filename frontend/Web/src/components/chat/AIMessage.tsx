@@ -1,5 +1,6 @@
-import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { plainText } from '@/lib/text';
+import { MercoraGlyph } from '@/components/layout/MercoraMark';
 import { MessageBlocks, type MessageBlockHandlers } from './MessageBlocks';
 import { MessageBubble, MessageShell } from './MessageShell';
 import type { ChatTurn } from '@/types';
@@ -11,6 +12,10 @@ import type { ChatTurn } from '@/types';
  * marker, the failure styling, and the typed blocks - product results, the
  * authorisation gate, the payment card. A failed turn is styled as a failure rather
  * than dropped, because a reply the agent could not produce is information.
+ *
+ * The avatar is the Mercora glyph rather than a sparkle. A sparkle says "AI magic";
+ * this product's claim is the opposite one, that the thing talking to you is a bounded
+ * system with a gate in it.
  */
 export function AIMessage({
   turn,
@@ -27,26 +32,21 @@ export function AIMessage({
       avatar={
         <span
           className={cn(
-            'mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border',
-            turn.failed
-              ? 'border-danger-line bg-danger-bg text-danger'
-              : 'border-accent-100 bg-accent-50 text-accent',
+            'mt-0.5 grid size-7 shrink-0 place-items-center rounded-control p-1',
+            turn.failed ? 'bg-danger-bg text-danger' : 'bg-brand-blue text-white',
           )}
         >
-          <Sparkles className="size-3.5" aria-hidden />
+          <MercoraGlyph />
         </span>
       }
     >
       {turn.content ? (
         <MessageBubble
           className={cn(
-            'border',
-            turn.failed
-              ? 'border-danger-line bg-danger-bg text-ink'
-              : 'border-line bg-surface text-ink',
+            turn.failed ? 'bg-danger-bg text-ink' : 'bg-surface-sunken text-ink',
           )}
         >
-          {turn.content}
+          {plainText(turn.content)}
         </MessageBubble>
       ) : null}
 

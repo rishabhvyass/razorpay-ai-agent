@@ -31,7 +31,12 @@ export function MessageShell({
 
   return (
     <article
-      className={cn('animate-fade-up flex gap-2.5', mirrored && 'flex-row-reverse')}
+      className={cn(
+        'animate-fade-up flex gap-2.5',
+        // Spec section 11: both turns rise the same 8px, and the reader's own turn does
+        // it faster - it is a reply to nothing, it is the thing they just did.
+        mirrored && 'animate-turn-own flex-row-reverse',
+      )}
       aria-label={label}
     >
       {avatar}
@@ -68,7 +73,7 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        'rounded-card max-w-[min(38rem,100%)] px-3.5 py-2.5 text-[13px] leading-relaxed',
+        'rounded-card max-w-[min(38rem,100%)] px-4 py-3 text-[13px] leading-relaxed',
         className,
       )}
     >

@@ -20,9 +20,8 @@
  *      the backend wins, silently and by construction.
  *
  *   3. There is no code path here that sets a payment status. Status is read from
- *      the backend (usePaymentStatus) or, in mock mode, from the clearly-labelled
- *      overlay. `simulateSettlement` exists only in mock mode and the service
- *      throws if called otherwise.
+ *      the backend (usePaymentStatus). No browser-side payment simulation or payment
+ *      initiation path is exposed.
  *
  * State lives in a provider rather than in the chat page because the right-hand
  * agent activity panel and the payment card need the same session, and threading it
@@ -52,8 +51,7 @@ import { ApiError } from '@/services/api';
 import { sendMessage } from '@/services/chatService';
 import { appendUserMessage, createConversation } from '@/services/conversationService';
 import { createOrder } from '@/services/orderService';
-import { requestPaymentLink, simulateSettlement } from '@/services/paymentService';
-import { mockApprovalActions, mockSettlementActions } from '@/services/mock/mockAgent';
+import { mockApprovalActions } from '@/services/mock/mockAgent';
 import type { AgentAction, ChatTurn, Product } from '@/types';
 
 /** Where a confirmation card is in its lifecycle. Absent = still awaiting a decision. */
@@ -72,7 +70,6 @@ export type AgentPhase =
   | 'thinking'
   | 'searching-catalogue'
   | 'creating-order'
-  | 'generating-link'
   | 'verifying-payment';
 
 export const AGENT_PHASE_LABEL: Record<AgentPhase, string> = {
@@ -81,7 +78,6 @@ export const AGENT_PHASE_LABEL: Record<AgentPhase, string> = {
   // user-facing string in this app spells it, so one label does not read as a typo.
   'searching-catalogue': 'Searching the catalogue',
   'creating-order': 'Creating secure order',
-  'generating-link': 'Generating payment link',
   'verifying-payment': 'Verifying payment',
 };
 
@@ -116,11 +112,9 @@ export interface CheckoutSessionValue {
    * handed to inputs as a bare callback and an extra positional parameter would then
    * be whatever those components happen to pass second.
    */
-  selectProduct: (product: Product) => void;
+  selectProduct: (product: Product, quantity?: number) => void;
   confirmPurchase: (turnId: string, args: { product: Product; quantity: number }) => void;
   declinePurchase: (turnId: string) => void;
-  /** Mock-only. Drives the deliberate success / failure demo. */
-  simulate: (orderId: string, outcome: 'success' | 'failure') => Promise<void>;
   reset: () => void;
 }
 
@@ -133,6 +127,13 @@ const CheckoutSessionContext = createContext<CheckoutSessionValue | null>(null);
 interface SendVariables {
   message: string;
   declaredIntent?: 'buy';
+  /**
+   * The product the intent is about, when the control that produced it knows - the
+   * product page. Overrides the standing recommendation derived from the transcript.
+   */
+  product?: Product;
+  /** Units the control asked for. Advisory: the authorisation card states the total. */
+  quantity?: number;
 }
 
 let seq = 0;
@@ -191,6 +192,27 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       if (product) {
         setStandingProduct(product);
         break;
+      }
+    }
+
+    /**
+     * Index any order the reply just mentioned.
+     *
+     * The confirm path records the order it creates, but the agent creates orders of
+     * its own: in real mode a `create_order` tool call is what produces the payment
+     * block, and this browser never called `POST /api/orders` for it. There is no
+     * "list all orders" endpoint to fall back on, so an unrecorded id is an order the
+     * Orders page cannot show - a purchase the user just made, missing from their
+     * history.
+     *
+     * Ids only. Every field displayed anywhere is still fetched from the backend by
+     * id, so this index cannot go stale into a wrong price or status.
+     */
+    for (const turn of incoming) {
+      for (const block of turn.blocks ?? []) {
+        if (block.kind === 'payment' || block.kind === 'order-confirmation') {
+          recordOrderId(block.order.id);
+        }
       }
     }
   }, []);
@@ -263,7 +285,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------------------
 
   const sendMutation = useMutation({
-    mutationFn: async ({ message, declaredIntent }: SendVariables) => {
+    mutationFn: async ({ message, declaredIntent, product, quantity }: SendVariables) => {
       const id = await ensureConversation();
 
       if (id) {
@@ -280,8 +302,12 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       return sendMessage({
         conversationId: id ?? 'local',
         message,
-        standingProduct,
+        // An explicit product wins over whatever the transcript implies: the intent
+        // can arrive from the product page, where there is no prior recommendation for
+        // "buy it" to resolve against.
+        standingProduct: product ?? standingProduct,
         ...(declaredIntent ? { declaredIntent } : {}),
+        ...(quantity !== undefined ? { declaredQuantity: quantity } : {}),
         onPhase: setPhase,
       });
     },
@@ -307,7 +333,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
               message: errorMessage(error),
               hint:
                 error instanceof ApiError && error.isNotImplemented
-                  ? 'POST /api/chat is not implemented on the backend yet. Enable VITE_USE_MOCK to walk the flow with the labelled mock agent.'
+                  ? 'The backend chat route is unavailable. Check that the backend is running and an AI provider key is configured.'
                   : 'You can retype the message to try again.',
             },
           ],
@@ -321,7 +347,7 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
   });
 
   const dispatch = useCallback(
-    (message: string, declaredIntent?: 'buy') => {
+    (message: string, options?: { declaredIntent?: 'buy'; product?: Product; quantity?: number }) => {
       const trimmed = message.trim();
       if (trimmed === '' || sendMutation.isPending) return;
 
@@ -336,7 +362,12 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
 
       if (!transcriptRecording) warnTranscript();
       setPhase('thinking');
-      sendMutation.mutate({ message: trimmed, ...(declaredIntent ? { declaredIntent } : {}) });
+      sendMutation.mutate({
+        message: trimmed,
+        ...(options?.declaredIntent ? { declaredIntent: options.declaredIntent } : {}),
+        ...(options?.product ? { product: options.product } : {}),
+        ...(options?.quantity !== undefined ? { quantity: options.quantity } : {}),
+      });
     },
     [appendTurns, sendMutation, transcriptRecording, warnTranscript],
   );
@@ -345,12 +376,23 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
   const send = useCallback((message: string) => dispatch(message), [dispatch]);
 
   /**
-   * The user pressed the button on a recommendation. The transcript still records a
-   * sentence in the user's voice, because that is what they asked for, but the
-   * adapter is told the intent rather than left to infer it from the product name.
+   * The user pressed the button on a recommendation, or the buy action on a product
+   * page. The transcript still records a sentence in the user's voice, because that is
+   * what they asked for, but the adapter is told the intent rather than left to infer
+   * it from the product name.
+   *
+   * The quantity is named in the sentence as well as passed alongside it, so a real
+   * `POST /api/chat` - which ignores the hint and reads the message - sees it too.
+   * Either way the number the user authorises is the one the confirmation card states.
    */
   const selectProduct = useCallback(
-    (product: Product) => dispatch(`I'd like to buy the ${product.name}`, 'buy'),
+    (product: Product, quantity = 1) =>
+      dispatch(
+        quantity > 1
+          ? `I'd like to buy ${quantity} × ${product.name}`
+          : `I'd like to buy the ${product.name}`,
+        { declaredIntent: 'buy', product, quantity },
+      ),
     [dispatch],
   );
 
@@ -378,69 +420,9 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
 
       recordOrderId(order.id);
 
-      // ---------------------------------------------------------------------
-      // The payment instrument is NOT chosen here in real mode.
-      //
-      // The confirm click authorises the purchase. It does not answer the separate
-      // question of how to pay, and this codebase does not let one click stand in for
-      // two financial decisions. So the order rests at PENDING_CONFIRMATION and the
-      // payment card offers both instruments, each with its own click, its own
-      // approval reason and its own audited MONEY_ACTION.
-      //
-      // There is also a hard reason. The backend binds exactly ONE instrument per
-      // order - `issuePaymentLink` refuses once a Razorpay order id exists, and
-      // `createCheckoutSession` refuses once a payment link id does, first come wins.
-      // Issuing a link automatically here would mean every order created through chat
-      // had already spent its one slot, and Standard Checkout could never be reached
-      // from the happy path.
-      //
-      // Mock mode keeps the automatic step, because the labelled overlay has no
-      // in-page modal to offer and a walkthrough that reaches no payable state at all
-      // would demonstrate nothing.
-      // ---------------------------------------------------------------------
-      let paymentUrl: string | null = null;
-      let razorpayOrderId: string | null = order.razorpayOrderId;
-      let paymentLinkId: string | null = order.razorpayPaymentLinkId;
-      let paymentLinkError: string | null = null;
-      let payable = order;
-
-      if (config.useMock) {
-        try {
-          setPhase('generating-link');
-          // The click that reached this function IS the approval, and this sentence is
-          // the reason recorded against the MONEY_ACTION in the audit trail. It names
-          // the product, the quantity and the amount the user was actually shown,
-          // because a justification reading 'user approved' documents nothing a
-          // reviewer could check. The amount is the order row's, not the quote's.
-          const view = await requestPaymentLink(
-            order.id,
-            `Customer authorised purchase of ${args.quantity} x ${args.product.name} for ${order.amountFormatted}.`,
-          );
-          paymentUrl = view.paymentUrl;
-          razorpayOrderId = view.razorpayOrderId;
-          paymentLinkId = view.paymentLinkId;
-          // The row moved to PAYMENT_PENDING server-side, so take the backend's fresher
-          // copy rather than the PENDING_CONFIRMATION one createOrder returned. Without
-          // this the card and the step tracker would report 'no payment link issued' for
-          // an order that already has one.
-          payable = view.order;
-        } catch (error) {
-          // The order above is real and already recorded in Postgres. Letting this
-          // reject would route to onError, which tells the user the order was not
-          // created - false, and an invitation to submit a second one. An order with no
-          // payment link is a real, displayable state, so it is reported as that rather
-          // than as a failure.
-          paymentLinkError = errorMessage(error);
-        }
-      }
-
       return {
-        order: payable,
+        order,
         product: args.product,
-        paymentUrl,
-        razorpayOrderId,
-        paymentLinkId,
-        paymentLinkError,
       };
     },
     onMutate: (args) => {
@@ -455,16 +437,8 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
         {
           id: localId('turn'),
           role: 'assistant',
-          // Three sentences, because the three states are genuinely different and the
-          // middle one used to be asserted for all of them. In real mode nothing has
-          // been issued yet and the card below offers the choice, so claiming a link
-          // exists would describe something the user cannot see.
           content:
-            result.paymentLinkError !== null
-              ? 'The order is recorded, but no payment link could be issued for it. Nothing has been charged.'
-              : config.useMock
-                ? 'Order recorded and a payment link issued. Complete the payment to continue - I will only report success once the payment is verified.'
-                : 'Order recorded. Nothing has been charged yet - choose how to pay below, and I will only report success once Razorpay confirms the payment was captured.',
+            'Order recorded. Nothing has been charged yet. Payment status will update here only after the backend verifies the provider response.',
           createdAt: new Date().toISOString(),
           mock: config.useMock,
           blocks: [
@@ -473,22 +447,17 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
               // Amounts and status come from the order row the backend returned.
               order: result.order,
               product: result.product,
-              paymentUrl: result.paymentUrl,
+              paymentUrl: null,
             },
           ],
         },
       ]);
 
       if (config.useMock) {
-        // `paymentLinkId` is passed through as null when no link was issued, so the
-        // trail records that step as failed instead of claiming a link that does not
-        // exist. A stand-in string like 'not issued' would have read as a success.
         appendActions(
           mockApprovalActions({
             productName: result.product.name,
             orderId: result.order.id,
-            razorpayOrderId: result.razorpayOrderId,
-            paymentLinkId: result.paymentLinkId,
           }),
         );
       }
@@ -546,50 +515,6 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
     [appendTurns],
   );
 
-  // ---------------------------------------------------------------------------
-  // Mock settlement (demo control)
-  // ---------------------------------------------------------------------------
-
-  const simulate = useCallback(
-    async (orderId: string, outcome: 'success' | 'failure') => {
-      // Cleared in a `finally`, not after the await: settlement now throws when no
-      // payment was ever initiated for this order, and an early return would leave
-      // "Verifying payment" on screen for a verification that had already stopped.
-      setPhase('verifying-payment');
-
-      try {
-        const view = await simulateSettlement(orderId, outcome);
-
-        // Derived from the settled row, never from which button was pressed. Passing
-        // `outcome` straight through meant that when settlement silently did not take
-        // effect, the trail still recorded 'payment_verified' and 'order_completed ->
-        // PAID' - the interface asserting a verified webhook it had never observed.
-        // The row reading PAID is the only thing that entitles it to claim verification.
-        if (view.order.status === 'PAID') {
-          appendActions(mockSettlementActions({ outcome: 'success', paymentId: view.paymentId }));
-        } else if (
-          view.order.status === 'PAYMENT_FAILED' ||
-          view.order.status === 'PAYMENT_EXPIRED'
-        ) {
-          appendActions(mockSettlementActions({ outcome: 'failure', paymentId: null }));
-        }
-        // Any other status means the settlement did not land. Nothing is recorded, and
-        // the invalidations below let the UI show whatever the row actually says.
-
-        await queryClient.invalidateQueries({ queryKey: qk.orders.payment(orderId) });
-        await queryClient.invalidateQueries({ queryKey: qk.orders.detail(orderId) });
-        if (conversationId) {
-          void queryClient.invalidateQueries({
-            queryKey: qk.conversations.activity(conversationId),
-          });
-        }
-      } finally {
-        setPhase(null);
-      }
-    },
-    [appendActions, conversationId, queryClient],
-  );
-
   const reset = useCallback(() => {
     clearStoredConversationId();
     setConversationId(null);
@@ -621,7 +546,6 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       selectProduct,
       confirmPurchase,
       declinePurchase,
-      simulate,
       reset,
     }),
     [
@@ -638,7 +562,6 @@ export function CheckoutSessionProvider({ children }: { children: ReactNode }) {
       send,
       sendMutation.error,
       sendMutation.isPending,
-      simulate,
       standingProduct,
       transcriptRecording,
       turns,

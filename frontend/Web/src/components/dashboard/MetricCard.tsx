@@ -49,10 +49,24 @@ export function MetricCard({
   }[tone];
 
   return (
-    <div className="rounded-card border-line bg-surface hover:border-line-strong hover:shadow-subtle border p-4 transition-all duration-200">
+    /*
+      Spec section 10: 1% on the card, 5% on the icon, and no shadow at any point -
+      the elevation utility that used to be here is inert under these tokens, so it
+      was doing nothing except suggesting the card should float. `transition-all` is
+      replaced by the three properties that actually change, because `all` on a card
+      this size also animates the value's colour when a figure resolves from pending.
+
+      The scale is `motion-safe:` on both elements: it is decoration, and the border
+      shift is what carries the hover for a reader who asked for less movement.
+    */
+    <div className="rounded-card border-line bg-surface hover:border-line-strong motion-micro group border p-4 transition-[background-color,border-color,transform] motion-safe:hover:scale-[1.01]">
       <div className="flex items-start justify-between gap-2">
         <p className="text-muted text-[12px] font-medium">{label}</p>
-        {icon ? <span className="text-faint shrink-0">{icon}</span> : null}
+        {icon ? (
+          <span className="text-faint motion-micro shrink-0 transition-transform motion-safe:group-hover:scale-105">
+            {icon}
+          </span>
+        ) : null}
       </div>
 
       {isPending ? (

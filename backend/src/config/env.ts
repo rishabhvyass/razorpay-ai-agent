@@ -107,7 +107,8 @@ const envSchema = z
    * Publishable key id, e.g. `rzp_test_XXXXXXXXXXXXXX`. Not a secret in the way
    * the two below are - it is designed to appear in Razorpay's own checkout - but
    * it is still not sent to our browser bundle, because nothing in this design
-   * needs it there. Payment Links are opened by URL; no client SDK is loaded.
+   * needs it there. Standard Checkout receives the publishable id at runtime from
+   * the backend's checkout-session response; the secret remains server-side.
    */
   RAZORPAY_KEY_ID: optionalSecret('RAZORPAY_KEY_ID'),
 
@@ -127,12 +128,19 @@ const envSchema = z
   RAZORPAY_WEBHOOK_SECRET: optionalSecret('RAZORPAY_WEBHOOK_SECRET', 8),
 
   // ---------------------------------------------------------------------------
-  // Agent (Claude / Anthropic)
+  // Agent providers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Anthropic, OpenRouter or AgentRouter API key.
-   */
+  /** Direct OpenAI API key. BACKEND ONLY. */
+  OPENAI_API_KEY: optionalSecret('OPENAI_API_KEY'),
+
+  /** OpenAI model used by the chat agent. Defaults to the cost-efficient GPT-5 mini. */
+  OPENAI_MODEL: z.preprocess(
+    blankToUndefined,
+    z.string().trim().min(3).optional(),
+  ),
+
+  /** Anthropic, OpenRouter or AgentRouter API key. BACKEND ONLY. */
   AGENTROUTER_API_KEY: optionalSecret('AGENTROUTER_API_KEY'),
   OPENROUTER_API_KEY: optionalSecret('OPENROUTER_API_KEY'),
 
@@ -287,13 +295,21 @@ export const RAZORPAY_ENV_VARS = [
 ] as const;
 
 export interface AgentConfig {
-  readonly provider: 'grok' | 'anthropic';
+  readonly provider: 'openai' | 'grok' | 'anthropic';
   readonly apiKey: string;
   readonly model: string;
   readonly baseURL?: string;
 }
 
 export const agentConfig: AgentConfig | null = (() => {
+  if (env.OPENAI_API_KEY !== undefined) {
+    return {
+      provider: 'openai',
+      apiKey: env.OPENAI_API_KEY,
+      model: env.OPENAI_MODEL ?? 'gpt-5-mini',
+    };
+  }
+
   if (
     env.XAI_API_KEY !== undefined ||
     env.AGENTROUTER_API_KEY?.startsWith('xai-')

@@ -9,11 +9,11 @@ const PERMITTED_SCOPE = [
 ];
 
 const HARD_INVARIANTS = [
-  'Zero autonomous charge capability — AI cannot self-authorize funds movement',
-  'Zero price modification — cannot override minor-unit prices locked in database',
-  'Zero unsolicited checkout links — sessions issued only after explicit user click',
-  'Zero unverified success states — orders transition to PAID only via verified webhook',
-  'Zero inventory bypass — all stock changes enforced via ACID database locks',
+  'Zero autonomous charge capability. AI cannot self-authorize funds movement',
+  'Zero price modification. Cannot override minor-unit prices locked in database',
+  'Zero unsolicited checkout links. Sessions issued only after explicit user click',
+  'Zero unverified success states. Orders transition to PAID only via verified webhook',
+  'Zero inventory bypass. All stock changes enforced via ACID database locks',
 ];
 
 const POLICY_PIPELINE = [

@@ -1,5 +1,5 @@
 /**
- * Agent service — the Claude + MCP orchestrator.
+ * Agent service — the configured AI provider + commerce-tool orchestrator.
  *
  * ============================================================================
  * This is what `POST /api/chat` calls. It owns the conversation loop:
@@ -71,14 +71,13 @@ Available tools:
 - get_product: Get details of a specific product
 - get_categories: List available product categories
 - create_order: Create a purchase order (REQUIRES USER APPROVAL)
-- create_payment_link: Issue a payment link for an order (REQUIRES USER APPROVAL)
 - get_order_status: Check an order's current status
 
 CRITICAL RULES:
 
 1. NEVER fabricate products or prices. Only recommend products returned by search_products or get_product.
 
-2. MONEY ACTIONS require explicit approval. Before calling create_order or create_payment_link:
+2. Creating an order requires explicit approval:
    - Show the user exactly what will be charged: product name, quantity, total price
    - Wait for a clear affirmative response ("yes", "confirm", "go ahead", "buy it")
    - If the user hasn't explicitly approved, DO NOT call these tools
@@ -91,9 +90,9 @@ CRITICAL RULES:
 
 5. If a tool call fails or is blocked, explain what happened honestly. Never pretend a failed action succeeded.
 
-6. The purchase flow is: search → recommend → get approval → create_order → create_payment_link → share URL
+6. The purchase flow is: search → recommend → get approval → create_order → open the Standard Checkout modal
 
-7. You cannot process payments directly. You issue a payment link that the user clicks to pay through Razorpay.
+7. You cannot process payments directly. After an order is created, the app opens Razorpay Standard Checkout in a modal.
 
 8. Optional Explainable Upsell (Growth): When the user expresses interest in a product, you may suggest ONE complementary product from the real catalogue (e.g. shoes to match a hoodie) with a clear reason ("Frequently paired together"). You must NEVER auto-purchase an upsell; any additional item requires explicit user approval.
 
@@ -261,22 +260,6 @@ async function extractBlocks(toolResults: ToolResult[]): Promise<ChatBlock[]> {
       }
     }
 
-    if (tr.toolName === 'create_payment_link' && !tr.isError) {
-      const output = tr.output as { orderId?: string; paymentUrl?: string | null } | null;
-      if (output?.orderId) {
-        const order = await getOrderById(output.orderId);
-        if (order !== null) {
-          const product = await getProductById(order.productId);
-          blocks.push({
-            kind: 'payment',
-            order,
-            product,
-            paymentUrl: output.paymentUrl ?? null,
-          });
-        }
-      }
-    }
-
     if (tr.isError && !hasSuccessBlock(toolResults)) {
       blocks.push({
         kind: 'error',
@@ -293,25 +276,24 @@ function hasSuccessBlock(results: ToolResult[]): boolean {
   return results.some(
     (r) =>
       !r.isError &&
-      (r.toolName === 'create_payment_link' ||
-        r.toolName === 'create_order' ||
+      (r.toolName === 'create_order' ||
         r.toolName === 'search_products' ||
         r.toolName === 'get_product'),
   );
 }
 
 // -----------------------------------------------------------------------------
-// Grok (xAI) Execution Loop
+// OpenAI-compatible Execution Loop (OpenAI and xAI)
 // -----------------------------------------------------------------------------
 
-async function runGrokChat(
+async function runOpenAICompatibleChat(
   args: { conversationId: string; message: string; requestId: string },
   history: PublicMessage[],
   toolCtx: ToolContext,
 ): Promise<ChatResponse> {
   const client = new OpenAI({
     apiKey: agentConfig!.apiKey,
-    baseURL: agentConfig!.baseURL ?? 'https://api.x.ai/v1',
+    ...(agentConfig!.baseURL ? { baseURL: agentConfig!.baseURL } : {}),
   });
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [
@@ -361,7 +343,7 @@ async function runGrokChat(
         conversationId: args.conversationId,
         role: 'assistant',
         content: replyText,
-        metadata: { requestId: args.requestId, model: agentConfig!.model, iteration, provider: 'grok' },
+        metadata: { requestId: args.requestId, model: agentConfig!.model, iteration, provider: agentConfig!.provider },
       });
 
       allTurns.push({
@@ -572,8 +554,8 @@ async function runAnthropicChat(
 // -----------------------------------------------------------------------------
 
 /**
- * Run a single agent turn: take a user message, call the configured AI provider
- * (Gemini or Claude/OpenRouter), execute tools, and return the structured response.
+ * Run a single agent turn: take a user message, call the configured AI provider,
+ * execute tools, and return the structured response.
  */
 export async function chat(args: {
   conversationId: string;
@@ -581,7 +563,9 @@ export async function chat(args: {
   requestId: string;
 }): Promise<ChatResponse> {
   if (agentConfig === null) {
-    throw new Error('Agent is not configured. Set XAI_API_KEY or AGENTROUTER_API_KEY.');
+    throw new Error(
+      'Agent is not configured. Set OPENAI_API_KEY, AGENTROUTER_API_KEY, OPENROUTER_API_KEY, or XAI_API_KEY.',
+    );
   }
 
   const history = await getRecentMessages(args.conversationId, CONTEXT_WINDOW_MESSAGES);
@@ -593,8 +577,8 @@ export async function chat(args: {
     userApproved,
   };
 
-  if (agentConfig.provider === 'grok') {
-    return runGrokChat(args, history, toolCtx);
+  if (agentConfig.provider === 'openai' || agentConfig.provider === 'grok') {
+    return runOpenAICompatibleChat(args, history, toolCtx);
   }
 
   return runAnthropicChat(args, history, toolCtx);
