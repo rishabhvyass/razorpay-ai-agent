@@ -49,11 +49,11 @@ https://YOUR-DEMO-VIDEO-URL
 
 | | |
 | :-- | :-- |
-| 🌐 **Live app** | <https://YOUR-LIVE-URL> |
-| 💬 **Talk to the agent** | <https://YOUR-LIVE-URL/checkout> |
-| 📊 **Agent activity trail** | <https://YOUR-LIVE-URL/activity> |
-| 📦 **Orders** | <https://YOUR-LIVE-URL/orders> |
-| 🔌 **Integrate page** | <https://YOUR-LIVE-URL/integrate> |
+| 🌐 **Live app** | <https://mercora-coral.vercel.app/> |
+| 💬 **Talk to the agent** | <https://mercora-coral.vercel.app/checkout> |
+| 📊 **Agent activity trail** | <https://mercora-coral.vercel.app/activity> |
+| 📦 **Orders** | <https://mercora-coral.vercel.app/orders> |
+| 🔌 **Integrate page** | <https://mercora-coral.vercel.app/integrate> |
 
 > The live deployment runs Razorpay in **test mode**. Use Razorpay's test card
 > `4111 1111 1111 1111` with any future expiry and any CVV. No real money moves.
