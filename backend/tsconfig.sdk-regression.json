@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "src/services/agentService.ts",
+    "scripts/ai-sdk-types.ts"
+  ]
+}

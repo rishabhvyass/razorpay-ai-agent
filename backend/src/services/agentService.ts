@@ -22,8 +22,36 @@
  * ============================================================================
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
+/**
+ * Both SDKs are imported by their NAMED class export, not their default export,
+ * and their types come from the resource modules that declare them rather than
+ * from the class's merged namespace (`Anthropic.MessageParam` and friends).
+ *
+ * That is deliberate, and it is what makes this file compile the same way
+ * everywhere. A default import of a package whose type declarations are read as
+ * CommonJS binds the module namespace object unless `esModuleInterop` is on, and
+ * a namespace object is neither constructable nor namespace-merged with the
+ * class - so `new Anthropic(...)` becomes "This expression is not constructable"
+ * and `Anthropic.ContentBlock` becomes "has no exported member". Both SDKs
+ * export the class by name and the types from their own subpaths, and neither of
+ * those depends on an interop flag or on which of index.d.ts / index.d.mts the
+ * resolver picks.
+ *
+ * Not a hypothetical: a Vercel build type-checked this file with its own
+ * compiler defaults instead of backend/tsconfig.json and failed on exactly those
+ * six lines, while `tsc -p tsconfig.json` passed locally. The build
+ * configuration is worth fixing on its own, but source that only compiles under
+ * one set of compiler options is the more fragile half of that pair.
+ */
+import { Anthropic } from '@anthropic-ai/sdk';
+import type {
+  ContentBlock,
+  MessageParam,
+  ToolResultBlockParam,
+  ToolUseBlock,
+} from '@anthropic-ai/sdk/resources/messages';
+import { OpenAI } from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 import { agentConfig } from '../config/env.js';
 import { createMessage, getRecentMessages, type PublicMessage } from '../repositories/messageRepo.js';
@@ -176,7 +204,7 @@ type ClaudeRole = 'user' | 'assistant';
 
 interface ClaudeMessage {
   role: ClaudeRole;
-  content: string | Anthropic.ContentBlock[];
+  content: string | ContentBlock[];
 }
 
 /**
@@ -296,7 +324,7 @@ async function runOpenAICompatibleChat(
     ...(agentConfig!.baseURL ? { baseURL: agentConfig!.baseURL } : {}),
   });
 
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
+  const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
   ];
 
@@ -432,7 +460,7 @@ async function runAnthropicChat(
   const allTurns: ChatTurn[] = [];
   const allToolResults: ToolResult[] = [];
 
-  const messages: Anthropic.MessageParam[] = claudeMessages.map((m) => ({
+  const messages: MessageParam[] = claudeMessages.map((m) => ({
     role: m.role,
     content: m.content as string,
   }));
@@ -447,7 +475,7 @@ async function runAnthropicChat(
     });
 
     const textParts: string[] = [];
-    const toolUseParts: Anthropic.ToolUseBlock[] = [];
+    const toolUseParts: ToolUseBlock[] = [];
 
     const rawContent = Array.isArray(response?.content)
       ? response.content
@@ -459,7 +487,7 @@ async function runAnthropicChat(
       if (block.type === 'text' && 'text' in block && typeof block.text === 'string') {
         textParts.push(block.text);
       } else if (block.type === 'tool_use') {
-        toolUseParts.push(block as Anthropic.ToolUseBlock);
+        toolUseParts.push(block as ToolUseBlock);
       }
     }
 
@@ -503,10 +531,10 @@ async function runAnthropicChat(
 
     const assistantBlocks = rawContent.filter(
       (b) => b.type === 'text' || b.type === 'tool_use',
-    ) as Anthropic.ContentBlock[];
+    ) as ContentBlock[];
     messages.push({ role: 'assistant', content: assistantBlocks });
 
-    const toolResultBlocks: Anthropic.ToolResultBlockParam[] = [];
+    const toolResultBlocks: ToolResultBlockParam[] = [];
 
     for (const toolUse of toolUseParts) {
       const result = await executeTool(

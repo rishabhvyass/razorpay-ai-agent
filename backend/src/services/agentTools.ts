@@ -17,7 +17,7 @@
  * and avoids leaking internal ids or metadata the model does not need.
  */
 
-import type Anthropic from '@anthropic-ai/sdk';
+import type { Tool } from '@anthropic-ai/sdk/resources/messages';
 
 import {
   completeAgentAction,
@@ -44,7 +44,7 @@ import {
 // Tool definitions — the schema Claude sees
 // -----------------------------------------------------------------------------
 
-export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
+export const TOOL_DEFINITIONS: Tool[] = [
   {
     name: 'search_products',
     description:
