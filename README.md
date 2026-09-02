@@ -6,7 +6,7 @@
 
 **A conversational commerce surface where an AI agent finds the product, a human authorises the spend, and Razorpay — not the model — moves the money.**
 
-[![Live Demo](https://img.shields.io/badge/▶%20Live%20Demo-Open-3B82F6?style=for-the-badge&labelColor=111827)](https://YOUR-LIVE-URL)
+[![Live Demo](https://img.shields.io/badge/▶%20Live%20Demo-Open-3B82F6?style=for-the-badge&labelColor=111827)](https://mercora-coral.vercel.app/)
 &nbsp;
 [![Watch the demo](https://img.shields.io/badge/🎥%20Watch%20the%20Demo-F59E0B?style=for-the-badge&labelColor=111827)](#-demo)
 
