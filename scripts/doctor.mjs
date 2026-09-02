@@ -93,9 +93,44 @@ function state(envMap, key) {
 const backendEnv = parseEnvFile(BACKEND_ENV);
 const webEnv = parseEnvFile(WEB_ENV);
 
-/* ------------------------------------------------------------- 1. secrets -- */
+/* -------------------------------------------------------- 1. dependencies -- */
 
-heading('1. Environment files');
+/**
+ * The root package has no dependencies of its own and is not an npm workspace,
+ * so `npm install` at the root installs nothing and the two sub-packages each
+ * need their own. Every root script delegates with `npm --prefix`, and a
+ * delegated script whose binary was never installed fails as `sh: tsc: command
+ * not found` - which npm reports as exit code 127 and nothing else. That is a
+ * genuinely opaque way to be told "you skipped an install", and it is the exact
+ * failure a CI provider hits when it installs from the repository root, so it is
+ * worth naming here before anything else is checked.
+ */
+heading('1. Dependencies');
+
+const PACKAGES = [
+  { dir: 'backend', bin: 'tsc', why: 'backend build runs tsc' },
+  { dir: join('frontend', 'Web'), bin: 'vite', why: 'web build runs tsc -b && vite build' },
+];
+
+let depsReady = true;
+for (const pkg of PACKAGES) {
+  const installed = existsSync(join(ROOT, pkg.dir, 'node_modules'));
+  const hasBin = existsSync(join(ROOT, pkg.dir, 'node_modules', '.bin', pkg.bin));
+  if (installed && hasBin) {
+    line('ok', `${pkg.dir}/node_modules`, `installed, ${pkg.bin} present`);
+  } else {
+    const note = installed
+      ? `installed but ${pkg.bin} is missing -> npm --prefix ${pkg.dir} install`
+      : `not installed -> npm run install:all  (${pkg.why}; missing = exit 127)`;
+    line('bad', `${pkg.dir}/node_modules`, note);
+    depsReady = false;
+    blockers += 1;
+  }
+}
+
+/* ------------------------------------------------------------- 2. secrets -- */
+
+heading('2. Environment files');
 
 if (backendEnv === null) {
   line('bad', 'backend/.env', 'does not exist -> cp backend/.env.example backend/.env');
@@ -163,9 +198,9 @@ if (razorpayReady) {
   optional += 1;
 }
 
-/* ---------------------------------------------------------- 2. supabase db -- */
+/* ---------------------------------------------------------- 3. supabase db -- */
 
-heading('2. Supabase project');
+heading('3. Supabase project');
 
 /**
  * One REST probe against the products table. This is the same question
@@ -246,12 +281,17 @@ if (!supabaseReady) {
   }
 }
 
-/* ------------------------------------------------------- 3. what works now -- */
+/* ------------------------------------------------------- 4. what works now -- */
 
-heading('3. What works right now');
+heading('4. What works right now');
 
 const dbUp = dbState === 'seeded';
 const useMock = webEnv === null || ['1', 'true', 'yes', 'on'].includes((webEnv.get('VITE_USE_MOCK') ?? 'true').trim().toLowerCase());
+
+// Mirrors the provider precedence in backend/src/config/env.ts: any one of these
+// makes agentConfig non-null, and /api/chat answers 501 without it.
+const AGENT_KEYS = ['OPENAI_API_KEY', 'XAI_API_KEY', 'AGENTROUTER_API_KEY', 'OPENROUTER_API_KEY'];
+const agentReady = AGENT_KEYS.some((k) => state(backendEnv, k) === 'present');
 
 line(dbUp ? 'ok' : 'bad', 'Product catalogue', dbUp ? 'GET /api/products' : 'needs the schema + seed');
 line(dbUp ? 'ok' : 'bad', 'Conversations, orders', dbUp ? 'create, read, transition' : 'needs the schema');
@@ -261,13 +301,21 @@ line(
   dbUp && razorpayReady ? 'payment link -> pay -> webhook -> PAID' : 'needs the schema AND the Razorpay keys',
 );
 line(useMock ? 'ok' : 'warn', 'Mock checkout demo', useMock ? 'VITE_USE_MOCK=true - runs with no keys at all' : 'off (VITE_USE_MOCK is not true)');
-line('warn', 'Conversational agent', 'POST /api/chat is not built - the frontend mocks it');
+line(
+  agentReady ? 'ok' : 'warn',
+  'Conversational agent',
+  agentReady ? 'POST /api/chat' : 'POST /api/chat answers 501 until a provider key is set',
+);
 
-/* -------------------------------------------------------- 4. what to do next */
+/* -------------------------------------------------------- 5. what to do next */
 
-heading('4. What to do next');
+heading('5. What to do next');
 
 const steps = [];
+
+if (!depsReady) {
+  steps.push('npm run install:all   (nothing below can run until this succeeds)');
+}
 
 if (backendEnv === null) {
   steps.push('cp backend/.env.example backend/.env, then fill in the Supabase values.');

@@ -23,6 +23,7 @@
     "survey:live": "npm --prefix backend run survey:live"
   },
   "workspaces_note": "Deliberately NOT npm workspaces. The backend and the web client have separate lockfiles because they are separately deployable, and hoisting would put frontend packages in reach of the backend's import resolver - which is how a browser-only package ends up imported into a process that holds the service-role key. These scripts use --prefix instead.",
+  "scripts_note": "Every script here delegates into a sub-package and therefore assumes `npm run install:all` has already run: this package declares no dependencies, so `npm install` at the root installs nothing and no sub-package binary exists. Skipping that step makes `npm run build` fail as `sh: tsc: command not found`, which npm reports as bare exit code 127. `npm run doctor` names it. Do NOT use these root scripts as a CI or Vercel build command - each deployable has its own project rooted at backend/ or frontend/Web/, so the install and the build both run inside the package that owns the lockfile. See section 14 of backend/README.md.",
   "dependencies": {},
   "devDependencies": {}
 }

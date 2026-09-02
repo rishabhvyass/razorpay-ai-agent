@@ -20,3 +20,5 @@ supabase/setup.generated.sql
 .DS_Store
 .idea/
 .vscode/
+.vercel
+.env*

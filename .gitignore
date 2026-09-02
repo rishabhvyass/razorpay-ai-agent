@@ -59,3 +59,16 @@ Thumbs.db
 *.swp
 
 .scratch/
+
+# Vercel CLI local state. `vercel link` / `vercel pull` write project ids and
+# pulled environment values here (.vercel/.env.*.local), so the whole tree is
+# ignored - including sibling copies a tool may leave behind, which a bare
+# `.vercel` pattern would not match.
+.vercel*
+
+# Belt and braces over the specific .env rules above: any new dotenv file is
+# ignored by default. The .example files are the documented exception; they hold
+# placeholders only and must stay committable.
+.env*
+!.env.example
+!**/.env.example

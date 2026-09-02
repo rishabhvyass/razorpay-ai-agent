@@ -476,19 +476,27 @@ cannot hide behind a replayed key.
 
 ### Payments
 
-All three answer `501 PAYMENT_NOT_CONFIGURED` when the Razorpay variables are unset,
-naming the variables that are missing.
+All payment routes answer `501 PAYMENT_NOT_CONFIGURED` when the Razorpay variables are
+unset, naming the variables that are missing.
 
 | Method | Path | Notes |
 |---|---|---|
 | `POST` | `/api/orders/:id/payment-link` | **Requires `{ "approved": true, "approvalReason": "..." }`.** `201`. Moves the order to `PAYMENT_PENDING`. |
 | `GET` | `/api/orders/:id/payment` | Current payment view. Contacts nobody. |
 | `POST` | `/api/orders/:id/payment/refresh` | Asks Razorpay what happened and applies the answer. |
+| `POST` | `/api/cancel-checkout` | Records a customer-closing the Standard Checkout modal as `CANCELLED`. Requires `{ "orderId": "...", "reason": "..." }`. |
 
-The request body accepts `approved`, `approvalReason` and `conversationId` — and
-nothing else. It is `.strict()`, so sending `amount`, `currency`, `status` or
+The payment-link request body accepts `approved`, `approvalReason` and `conversationId` —
+and nothing else. It is `.strict()`, so sending `amount`, `currency`, `status` or
 `paymentUrl` is a `400` rather than a field that is quietly ignored. The amount charged
 is read from the order row inside the service, so no caller can name its own price.
+
+`cancel-checkout` accepts only `orderId` and `reason`. It can cancel an order only after
+Standard Checkout has created a Razorpay Order and while the app row is still
+`PAYMENT_PENDING`; payment-link orders and already paid orders are rejected. The route
+does not contact Razorpay or mark anything paid — it records the customer closing the
+modal and returns the updated payment view so the browser can show the cancellation
+screen immediately.
 
 `approved` is typed as the literal `true`, not a boolean. A request without it does not
 fail in the validator — it reaches the service, which writes a `blocked` row to
@@ -751,9 +759,225 @@ The pieces this phase put in place for it:
 
 ---
 
+## 14. Deploying to Vercel
+
+Two projects from one repository, because these are two deployables with separate
+lockfiles — see the `workspaces_note` in the root `package.json` for why they are
+deliberately not npm workspaces.
+
+| Project | Root Directory | What it serves |
+|---|---|---|
+| API | `backend` | The Express app, as one Function |
+| Web | `frontend/Web` | The static SPA |
+
+Every one of these four settings is per-project, and leaving any of them on a repo-root
+default is what produces the two failures described below. Both projects use Vercel's
+defaults for install and build once the Root Directory is right — the point is that the
+defaults are read *inside* the Root Directory, where the lockfile and the `build` script
+that owns it live.
+
+| Setting | API project | Web project |
+|---|---|---|
+| Framework Preset | Other | Vite |
+| Root Directory | `backend` | `frontend/Web` |
+| Install Command | `npm ci` (default) | `npm ci` (default) |
+| Build Command | `npm run build` → `tsc` | `npm run build` → `tsc -b && vite build` |
+| Output Directory | n/a — a Function, from `src/server.ts` | `dist` |
+| Node.js Version | 22.x | 22.x |
+
+### Root Directory is not optional
+
+Set the API project's **Root Directory to `backend`** before the first build.
+
+Vercel's Node builder compiles `src/server.ts` and everything it imports with its own
+TypeScript, and it reads `tsconfig.json`, `package.json` and `package-lock.json` from the
+*project* root. Point the project at the repository root instead and it finds none of
+ours: no `tsconfig.json`, so it falls back to its own compiler defaults, and no lockfile
+pinning `@anthropic-ai/sdk` and `openai`, so it resolves whatever the caret ranges allow.
+
+That is the best explanation for the first failed build here — six `TS2694`/`TS2351`
+errors in `src/services/agentService.ts`, every one of them about an SDK type or
+constructor, resolved from `/vercel/path0/node_modules` rather than `backend/`, in a file
+that `npm run typecheck` compiles cleanly and that no local compiler configuration
+reproduces. `agentService.ts` no longer depends on either half of that guess: it imports
+each client by its **named** export and each type from the SDK's own resource subpath, so
+it does not care whether `esModuleInterop` is on or which of `index.d.ts` / `index.d.mts`
+the resolver picks. Fix the Root Directory anyway — the version drift is the other half.
+
+`npm run typecheck:ai-sdk` and `npm run test:ai-sdk` exist to catch that class of
+breakage before a deploy does. The first compiles the exact SDK surface this codebase
+uses; the second constructs both clients without calling a provider.
+
+#### What a repo-root Root Directory actually does
+
+Leaving it at `.` fails earlier and more confusingly. Vercel installs from the root
+`package.json`, whose `dependencies` and `devDependencies` are empty on purpose, so
+`backend/node_modules` is never created. Its default build command then runs the root
+`build` script, which delegates with `npm --prefix backend run build`, which runs `tsc`,
+which is not on the PATH:
+
+```
+Error: Command "npm run build" exited with 127
+```
+
+127 is "command not found". Copy the repository to a directory with no `node_modules`
+above it, skip the per-package installs, and the root build reproduces it exactly:
+
+```
+> checkout-concierge@0.1.0 build
+> npm --prefix backend run build && npm --prefix frontend/Web run build
+
+> checkout-concierge-backend@0.1.0 build
+> tsc
+
+sh: tsc: command not found
+```
+
+The missing executable is `tsc`, from `backend/package.json`'s `"build": "tsc"`. `vite` is
+never reached, because the `&&` chain stops at the backend.
+
+This is worth reproducing somewhere isolated rather than in place, because a working
+checkout will not show it. `npm run <script>` prepends the `node_modules/.bin` of *every*
+ancestor directory to PATH, so one stray `node_modules` anywhere above the clone — a
+`~/Desktop/node_modules` from some long-forgotten `npm install` in the wrong folder — puts
+a `tsc` on the PATH that has nothing to do with this project. Removing
+`backend/node_modules` then produces a wall of `TS2307 Cannot find module` and exit 2,
+which looks like a different bug entirely. Vercel has no such ancestor, which is why the
+cloud gets the clean 127.
+
+Do not fix it by making the root build install first. Run `vercel build` against a
+repo-root project and the build command succeeds — and then this happens:
+
+```
+Error: No entrypoint found. Searched for:
+- app.{js,cjs,mjs,ts,cts,mts}
+- index.{js,cjs,mjs,ts,cts,mts}
+- server.{js,cjs,mjs,ts,cts,mts}
+- src/app.{js,cjs,mjs,ts,cts,mts}
+- src/index.{js,cjs,mjs,ts,cts,mts}
+- src/server.{js,cjs,mjs,ts,cts,mts}
+```
+
+From the repository root, `backend/src/server.ts` is at none of those paths, so there is
+**no Function for the Express app** — a green build with no API behind it. One project also
+has one Output Directory, and this repo has two outputs. Two projects is the structural
+requirement, not a preference; it is the same reason the root `package.json` is not an npm
+workspace.
+
+### No adapter file
+
+`src/server.ts` default-exports the assembled app, and `server` under `src/` is already
+one of the entrypoint names Vercel's zero-configuration Express detection looks for. So
+there is no adapter file, and therefore no second copy of the middleware order that could
+drift out of step with the real one — `node dist/server.js` and the Function serve the
+same instance.
+
+`vercel.json` raises `maxDuration` to 60s for it. `/api/chat` is a blocking
+request/response — nothing in this backend streams — and an agent tool loop does not fit
+in the 10s default. If that `functions` glob ever stops matching, delete the block and
+set Function Max Duration in the project settings instead.
+
+### `NODEJS_HELPERS=0` is required on the API project
+
+Vercel's runtime otherwise decorates the request with a lazily-parsed `request.body`,
+which is the one thing the `express.raw()` mount ahead of `express.json()` exists to
+prevent: the Razorpay webhook is authenticated by an HMAC over the exact bytes that
+arrived, and re-serialising a parsed object does not reproduce them.
+
+`api/webhooks.ts` fails closed rather than wrong if the variable is missing — it rejects a
+body that is not a `Buffer` instead of verifying a re-serialisation, so no order can reach
+`PAID` on an unverified delivery. But it then fails closed for *every* delivery, which is
+an outage, not a safeguard. Set the variable.
+
+### Environment variables
+
+Names only. Set the values in the Vercel dashboard; none of them belongs in the
+repository.
+
+API project:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `SUPABASE_URL` | yes | Boot fails without it |
+| `SUPABASE_ANON_KEY` | yes | Subject to RLS |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | **Bypasses RLS entirely.** Backend only — never in a browser bundle |
+| `NODEJS_HELPERS` | yes | `0` — see above |
+| `RAZORPAY_KEY_ID` | all three or none | |
+| `RAZORPAY_KEY_SECRET` | all three or none | Backend only |
+| `RAZORPAY_WEBHOOK_SECRET` | all three or none | Backend only |
+| an agent provider key | for `/api/chat` | `OPENAI_API_KEY`, or `XAI_API_KEY`, or `OPENROUTER_API_KEY` / `AGENTROUTER_API_KEY` |
+
+Leave `NODE_ENV` alone — Vercel sets it to `production`. Note what that lifts: the
+`rzp_test_` check in `config/env.ts` applies only outside production, so a **live**
+Razorpay key is accepted there and will charge real cards. Correct for production, a trap
+for a preview deployment. Give previews test-mode keys.
+
+Web project: `VITE_API_URL`, set to the API project's origin. It is inlined at build time,
+so changing it needs a redeploy — and anything in a `VITE_` variable ships to the browser,
+so the Razorpay secrets and the service-role key must never be copied into one.
+
+### After the first deploy
+
+Point the Razorpay webhook at the API origin directly, not through the web project:
+
+```
+https://<api-origin>/api/webhooks/razorpay
+```
+
+Then check the three things a deploy can get wrong. Liveness, and the route index's
+`payments.configured` / `agent.configured` flags — which report whether credentials are
+present, never what they are:
+
+```bash
+curl -s https://<api-origin>/health && curl -s https://<api-origin>/
+```
+
+And the one that actually matters, because it is the only way to observe from outside
+whether the raw body survived the runtime:
+
+```bash
+curl -s -X POST https://<api-origin>/api/webhooks/razorpay -H 'Content-Type: application/json' -H 'X-Razorpay-Signature: deliberately-wrong' -d '{"event":"payment_link.paid"}'
+```
+
+- `INVALID_WEBHOOK_SIGNATURE` — correct. The raw `Buffer` reached the verifier and the
+  HMAC was compared and rejected. This is the result you want.
+- `VALIDATION_ERROR` — the runtime parsed the body before Express saw it.
+  `NODEJS_HELPERS=0` is missing or did not take effect. Real deliveries are being
+  rejected too.
+- `PAYMENT_NOT_CONFIGURED` — the Razorpay variables are not set on this deployment.
+
+The probe records one `payment_events` row with `signature_verified = false` and changes
+no order state, which is exactly what an unverified delivery is supposed to do.
+
+### Still open after deploying
+
+Neither of these is a Vercel problem, and neither is fixed by shipping:
+
+- **There is no auth layer.** Every route is reachable by anyone who knows the URL. CORS
+  is not a boundary — it constrains browsers, not `curl`. See
+  [Known gap in this phase](#known-gap-in-this-phase).
+- `cors({ origin: true })` still reflects any origin, because an allowlist needs the final
+  domains and every preview deployment gets a fresh one. Harmless while there is no cookie
+  or header auth; the thing to change on the day there is.
+- `trust proxy` stays `false`. Vercel *is* a proxy, so `req.ip` is the proxy's — inert
+  today, since nothing in `src/` reads `req.ip`, `req.protocol`, `req.secure` or any
+  `X-Forwarded-*` header. It stops being inert the moment a rate limiter or an audit
+  entry is keyed on client IP.
+- **`engines` is a floor, not a pin.** `"node": ">=22"` makes Vercel warn that the build
+  will move to the next major on its own — a Node upgrade nobody chose, arriving on a
+  deploy that changed nothing. Pin the Node.js Version to 22.x in project settings. Left
+  as `>=22` in `package.json` deliberately: local development should not be held to a
+  single major, and nothing installed here requires more than 22.
+
+---
+
 ## What is deliberately not built yet
 
-Claude API · AgentRouter · MCP server · `POST /api/chat` · Telegram · React Native app.
+MCP server · Telegram · React Native app.
+
+`POST /api/chat` and the agent behind it *are* built — see section 13. It runs against
+OpenAI, xAI/Grok or the Claude API, and reaches OpenRouter and AgentRouter through the
+OpenAI-compatible client, whichever provider key is set; with none set it answers 501.
 
 Also absent, and worth naming separately because it is a security gap rather than a
 missing feature: **there is no auth layer yet.** See
