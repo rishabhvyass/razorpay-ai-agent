@@ -24,6 +24,7 @@
 
 ## 🎥 Demo
 
+
 <!--
   TWO THINGS TO FILL IN, both marked with obvious placeholders:
 
@@ -41,7 +42,7 @@
      the thumbnail link version underneath it.
 -->
 
-https://YOUR-DEMO-VIDEO-URL
+https://github.com/user-attachments/assets/0426722d-ace0-4f75-859f-87ecc8b87bc7
 
 <!-- Fallback for a YouTube / Loom link — delete the line above and use this:
 [![Watch the demo](https://img.shields.io/badge/▶%20Play%20the%20walkthrough-111827?style=for-the-badge)](https://YOUR-DEMO-VIDEO-URL)
