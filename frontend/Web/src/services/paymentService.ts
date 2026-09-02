@@ -75,6 +75,29 @@ export function verifyRazorpayPayment(
     .then(fromBackend);
 }
 
+/** Record that the customer closed the open Standard Checkout modal. */
+export function cancelRazorpayCheckout(
+  orderId: string,
+  reason = 'Customer cancelled Razorpay Standard Checkout.',
+  signal?: AbortSignal,
+): Promise<PaymentView> {
+  if (config.useMock) {
+    return Promise.reject(
+      new Error(
+        'Razorpay Checkout cancellation needs the real backend. Set VITE_USE_MOCK=false.',
+      ),
+    );
+  }
+
+  return request<unknown>('/api/cancel-checkout', {
+    method: 'POST',
+    body: { orderId, reason },
+    signal,
+  })
+    .then(decodeBackendPaymentView)
+    .then(fromBackend);
+}
+
 /** Read the current server-side payment view for an order. */
 export async function getPaymentView(orderId: string, signal?: AbortSignal): Promise<PaymentView> {
   if (!config.useMock) {

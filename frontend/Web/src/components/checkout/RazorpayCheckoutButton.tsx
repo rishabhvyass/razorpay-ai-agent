@@ -7,6 +7,7 @@ import { describePurchase } from '@/lib/format';
 import { formatMinor } from '@/lib/money';
 import { openRazorpayCheckout, type CheckoutOutcome } from '@/lib/razorpayCheckout';
 import {
+  cancelRazorpayCheckout,
   createRazorpayCheckoutSession,
   verifyRazorpayPayment,
   type PaymentView,
@@ -24,8 +25,10 @@ import type { Order, Product } from '@/types';
  *                               server-side; idempotent, so a second press reuses the
  *                               session rather than opening a way to be charged twice.
  *   2. open the modal            Razorpay collects the card. This app never sees it.
- *   3. POST /api/verify-payment  the modal's three values, verified server-side.
- *   4. render what came back     the order status from the database.
+ *   3. POST /api/cancel-checkout if the customer closes the modal, so the order is
+ *                               immediately recorded as CANCELLED server-side.
+ *   4. POST /api/verify-payment  the modal's three values, verified server-side.
+ *   5. render what came back     the order status from the database.
  *
  * ---------------------------------------------------------------------------
  * STEP 4 IS NOT OPTIONAL, AND IT IS WHY THIS COMPONENT HAS NO SUCCESS STATE OF ITS
@@ -35,16 +38,16 @@ import type { Order, Product } from '@/types';
  * an authorised-but-uncaptured payment, or for the wrong amount, produces a 200 and
  * an order that is still not PAID.
  *
- * So the verified view is handed to `onSettled` and the surrounding card renders
+ * So every server view is handed to `onSettled` and the surrounding card renders
  * whatever status it carries. This component reports only what it did - prepared,
- * waited, verified - never what the payment turned out to be.
+ * waited, cancelled, verified - never what the payment turned out to be.
  * ---------------------------------------------------------------------------
  */
 
 /** Shown as the merchant name in Razorpay's modal. */
 const MERCHANT_NAME = 'Checkout Concierge';
 
-type Stage = 'idle' | 'preparing' | 'awaiting' | 'verifying';
+type Stage = 'idle' | 'preparing' | 'awaiting' | 'cancelling' | 'verifying';
 
 export function RazorpayCheckoutButton({
   order,
@@ -128,10 +131,23 @@ export function RazorpayCheckoutButton({
       });
 
       if (result.kind !== 'completed') {
-        // Dismissed, or declined and then abandoned. Neither is an error and neither
-        // is reported as one: no money moved, and the order is still payable.
+        // A closed modal is now a server-side terminal outcome for this attempt. The
+        // backend checks that this is the Standard Checkout order that is still
+        // PAYMENT_PENDING, records CANCELLED, and returns the full payment view. That
+        // response replaces the pending card immediately instead of waiting for the
+        // three-second status poll.
         setOutcome(result);
+        setStage('cancelling');
+
+        const view = await cancelRazorpayCheckout(
+          order.id,
+          result.kind === 'failed'
+            ? `Customer closed Razorpay Checkout after the provider reported: ${result.description ?? 'the payment attempt failed'}.`
+            : 'Customer closed Razorpay Standard Checkout before completing payment.',
+        );
+
         setStage('idle');
+        onSettled(view);
         return;
       }
 
@@ -142,6 +158,7 @@ export function RazorpayCheckoutButton({
       setStage('idle');
       onSettled(view);
     } catch (cause) {
+      setOutcome(null);
       setError(cause);
       setStage('idle');
     } finally {
@@ -157,7 +174,7 @@ export function RazorpayCheckoutButton({
         variant="primary"
         size="md"
         onClick={() => void pay()}
-        loading={stage === 'preparing' || stage === 'verifying'}
+        loading={stage !== 'idle' && stage !== 'awaiting'}
         disabled={busy}
         icon={busy ? undefined : <Lock className="size-3.5" aria-hidden />}
         fullWidth
@@ -166,9 +183,11 @@ export function RazorpayCheckoutButton({
           ? 'Opening secure checkout…'
           : stage === 'awaiting'
             ? 'Complete the payment in the Razorpay window'
-            : stage === 'verifying'
-              ? `${AGENT_PHASE_LABEL['verifying-payment']}…`
-              : `Pay ${amount} securely`}
+            : stage === 'cancelling'
+              ? 'Cancelling the payment attempt…'
+              : stage === 'verifying'
+                ? `${AGENT_PHASE_LABEL['verifying-payment']}…`
+                : `Pay ${amount} securely`}
       </Button>
 
       {/* The stage is announced because the modal takes focus away from this button,
@@ -179,9 +198,11 @@ export function RazorpayCheckoutButton({
           ? 'Opening Razorpay checkout. Nothing has been charged yet.'
           : stage === 'awaiting'
             ? 'The Razorpay payment window is open. Complete the payment there.'
-            : stage === 'verifying'
-              ? 'Verifying the payment with the backend. The result will replace this card.'
-              : ''}
+            : stage === 'cancelling'
+              ? 'The checkout was closed. Recording the cancelled payment attempt.'
+              : stage === 'verifying'
+                ? 'Verifying the payment with the backend. The result will replace this card.'
+                : ''}
       </p>
 
       {stage === 'idle' && outcome === null && error === null ? (
@@ -199,18 +220,13 @@ export function RazorpayCheckoutButton({
         </p>
       ) : null}
 
-      {/* A dismissed modal is a perfectly ordinary thing to do and is reported as
-          information, not failure. It says what is true - nothing was charged - and
-          then hedges honestly: this app cannot see inside the modal, so if the
-          customer did pay and closed it before Razorpay called back, reconciliation is
-          the way to find out. */}
+      {/* A cancellation request only renders while the server is being contacted. On
+          success, `onSettled` swaps this component for PaymentFailure immediately. */}
       {outcome?.kind === 'dismissed' ? (
         <div className="rounded-control border-line bg-surface-sunken flex items-start gap-2.5 border px-3 py-2.5">
           <Info className="text-muted mt-0.5 size-3.5 shrink-0" aria-hidden />
           <p className="text-muted text-xs leading-relaxed">
-            Checkout was closed, so nothing has been charged and this order is still payable. If
-            you did complete a payment, use <strong>Check with Razorpay</strong> below — it asks the
-            provider what happened rather than guessing.
+            Checkout was closed. Recording the cancelled payment attempt…
           </p>
         </div>
       ) : null}
@@ -230,10 +246,7 @@ export function RazorpayCheckoutButton({
                 Razorpay reported: {outcome.description}
               </p>
             ) : null}
-            <p className="text-muted text-xs leading-relaxed">
-              You can try again — the same order and amount are reused, so retrying cannot create a
-              second charge.
-            </p>
+            <p className="text-muted text-xs leading-relaxed">Recording the cancelled payment attempt…</p>
           </div>
         </div>
       ) : null}

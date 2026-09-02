@@ -21,6 +21,7 @@ export interface MessageBlockHandlers {
   onConfirm: (turnId: string, args: { product: Product; quantity: number }) => void;
   onDecline: (turnId: string) => void;
   onSelectProduct: (product: Product) => void;
+  onNewOrder: (product: Product | null) => void;
   /** True while any request is in flight, so a second one cannot be started. */
   busy: boolean;
 }
@@ -32,6 +33,7 @@ function Block({
   onConfirm,
   onDecline,
   onSelectProduct,
+  onNewOrder,
   busy,
 }: MessageBlockHandlers & { block: ChatBlock; turnId: string }) {
   switch (block.kind) {
@@ -64,12 +66,18 @@ function Block({
           orderId={block.order.id}
           fallbackOrder={block.order}
           product={block.product}
+          onNewOrder={() => onNewOrder(block.product ?? null)}
         />
       );
 
     case 'order-confirmation':
       return (
-        <PaymentCard orderId={block.order.id} fallbackOrder={block.order} product={block.product} />
+        <PaymentCard
+          orderId={block.order.id}
+          fallbackOrder={block.order}
+          product={block.product}
+          onNewOrder={() => onNewOrder(block.product ?? null)}
+        />
       );
 
     case 'activity-summary':

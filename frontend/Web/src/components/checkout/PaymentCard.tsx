@@ -41,6 +41,7 @@ export function PaymentCard({
   fallbackOrder,
   product,
   onRefresh,
+  onNewOrder,
 }: {
   orderId: string;
   fallbackOrder?: Order;
@@ -51,6 +52,8 @@ export function PaymentCard({
    * has to refetch that itself, or the two disagree.
    */
   onRefresh?: () => void;
+  /** Optional assistant action used when this payment card is rendered in chat. */
+  onNewOrder?: () => void;
 }) {
   const payment = usePaymentStatus(orderId);
   const queryClient = useQueryClient();
@@ -208,15 +211,20 @@ export function PaymentCard({
                 // the button is the provider's verdict, and re-reading a row this app
                 // already polls every three seconds would tell the user nothing new. In
                 // mock mode there is no provider, so it refetches.
-                onRecheck={() => {
-                  if (isMock) {
-                    void payment.refetch();
-                    onRefresh?.();
-                    return;
-                  }
-                  void reconcile();
-                }}
+                onRecheck={
+                  order.status === 'CANCELLED'
+                    ? undefined
+                    : () => {
+                        if (isMock) {
+                          void payment.refetch();
+                          onRefresh?.();
+                          return;
+                        }
+                        void reconcile();
+                      }
+                }
                 rechecking={reconciling}
+                onNewOrder={onNewOrder}
               />
               {reconcileError ? <ErrorState error={reconcileError} compact /> : null}
             </>

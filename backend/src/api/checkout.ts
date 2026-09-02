@@ -30,7 +30,11 @@ import { z } from 'zod';
 
 import { RAZORPAY_ENV_VARS, isRazorpayConfigured } from '../config/env.js';
 import { getOrderByRazorpayOrderId } from '../repositories/orderRepo.js';
-import { createCheckoutSession, verifyCheckoutPayment } from '../services/checkoutService.js';
+import {
+  cancelCheckout,
+  createCheckoutSession,
+  verifyCheckoutPayment,
+} from '../services/checkoutService.js';
 import { badRequest, notFound, paymentNotConfigured } from '../utils/errors.js';
 
 export const checkoutRouter = Router();
@@ -105,6 +109,17 @@ const verifyPaymentSchema = z
   })
   .strict();
 
+const cancelCheckoutSchema = z
+  .object({
+    orderId: z.uuid({ error: 'orderId must be the UUID of the order being cancelled.' }),
+    reason: z
+      .string()
+      .trim()
+      .min(8, 'reason must explain why checkout was cancelled.')
+      .max(1000),
+  })
+  .strict();
+
 /**
  * Create a Razorpay Order and return what the modal needs to open.
  *
@@ -171,6 +186,44 @@ checkoutRouter.post('/create-order', async (req, res) => {
       note:
         'Razorpay order created and this order is PAYMENT_PENDING. No money has moved. It ' +
         'becomes PAID only after Razorpay reports a captured payment for this amount.',
+    },
+    requestId: req.requestId,
+  });
+});
+
+/**
+ * Record that the customer closed the currently open Standard Checkout modal.
+ *
+ * This does not call Razorpay and it cannot mark anything paid. It only moves the
+ * matching app order from PAYMENT_PENDING to CANCELLED after the service confirms
+ * that the order belongs to this checkout flow. The response is a complete payment
+ * view so the browser can replace its pending card without waiting for a poll.
+ */
+checkoutRouter.post('/cancel-checkout', async (req, res) => {
+  requirePaymentsConfigured();
+
+  const parsed = cancelCheckoutSchema.safeParse(req.body ?? {});
+
+  if (!parsed.success) {
+    throw badRequest(
+      'VALIDATION_ERROR',
+      'Invalid cancel-checkout payload. Send orderId and a short cancellation reason.',
+      issues(parsed.error),
+    );
+  }
+
+  const view = await cancelCheckout({
+    orderId: parsed.data.orderId,
+    reason: parsed.data.reason,
+    requestId: req.requestId,
+  });
+
+  res.json({
+    data: view,
+    meta: {
+      note:
+        'The customer closed Standard Checkout before a successful payment was verified. ' +
+        'The order is CANCELLED and no payment was marked as received.',
     },
     requestId: req.requestId,
   });

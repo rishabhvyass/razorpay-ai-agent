@@ -92,6 +92,13 @@ export interface CreateCheckoutSessionInput {
   requestId: string;
 }
 
+export interface CancelCheckoutInput {
+  orderId: string;
+  /** The customer-facing reason is kept in the audit trail, not trusted as state. */
+  reason: string;
+  requestId: string;
+}
+
 /**
  * Create a Razorpay Order and return what the modal needs to open.
  *
@@ -279,6 +286,96 @@ function describeOrder(order: PublicOrder, productName: string | null): string {
   return productName === null
     ? `Checkout Concierge order ${order.id}`
     : `${productName} x${order.quantity}`;
+}
+
+/**
+ * Cancel an open Standard Checkout attempt after the customer closes the modal.
+ *
+ * Closing a Razorpay modal does not produce a signed payment response and therefore
+ * cannot be sent through `verifyCheckoutPayment`. The browser also must not simply
+ * hide the payment UI while leaving the database in PAYMENT_PENDING: that makes an
+ * abandoned order look like an active payment forever.
+ *
+ * This endpoint is intentionally narrower than a generic order-cancel endpoint. It
+ * only accepts an order that already has a Razorpay Order, is still PAYMENT_PENDING,
+ * and has no Payment Link. That combination proves this was the Standard Checkout
+ * flow that just closed. PAID is never cancellable, and a repeated cancellation is
+ * idempotent so a modal callback retry cannot turn a normal terminal state into an
+ * error.
+ */
+export async function cancelCheckout(input: CancelCheckoutInput): Promise<PaymentView> {
+  const order = await getOrderById(input.orderId);
+
+  if (order === null) {
+    throw notFound('ORDER_NOT_FOUND', 'Order not found');
+  }
+
+  if (order.status === 'CANCELLED') {
+    return getPaymentView(order.id);
+  }
+
+  if (order.status === 'PAID') {
+    throw conflict(
+      'CONFLICT',
+      'This order is already paid and cannot be cancelled.',
+      { orderId: order.id, status: order.status },
+    );
+  }
+
+  if (
+    order.status !== 'PAYMENT_PENDING' ||
+    order.razorpayOrderId === null ||
+    order.razorpayPaymentLinkId !== null
+  ) {
+    throw conflict(
+      'INVALID_STATE_TRANSITION',
+      'Only an open Razorpay Standard Checkout session can be cancelled.',
+      {
+        orderId: order.id,
+        status: order.status,
+        hasRazorpayOrder: order.razorpayOrderId !== null,
+        hasPaymentLink: order.razorpayPaymentLinkId !== null,
+      },
+    );
+  }
+
+  const action = await startAgentAction({
+    toolName: 'cancel_checkout',
+    actionType: 'MONEY_ACTION',
+    orderId: order.id,
+    conversationId: order.conversationId,
+    reason: input.reason,
+    input: {
+      orderId: order.id,
+      razorpayOrderId: order.razorpayOrderId,
+      method: 'standard_checkout',
+      outcome: 'customer_dismissed',
+    },
+    requestId: input.requestId,
+  });
+
+  try {
+    const cancelled = await updateOrderStatus(order.id, 'CANCELLED');
+
+    await completeAgentAction(
+      action.id,
+      {
+        status: cancelled.status,
+        razorpayOrderId: cancelled.razorpayOrderId,
+        outcome: 'customer_dismissed',
+      },
+      cancelled.id,
+    );
+
+    return getPaymentView(cancelled.id);
+  } catch (cause) {
+    await failAgentAction(
+      action.id,
+      'CHECKOUT_CANCELLATION_FAILED',
+      cause instanceof Error ? cause.message : 'Checkout cancellation failed.',
+    );
+    throw cause;
+  }
 }
 
 // -----------------------------------------------------------------------------

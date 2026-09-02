@@ -85,6 +85,15 @@ export function createApp(): Express {
    * 256kb rather than the 100kb used elsewhere. A `payment_link.paid` delivery
    * carries three nested entities plus notes, and the size is chosen by the provider,
    * not by us - a delivery rejected for size would be retried forever.
+   *
+   * ON VERCEL this mount also depends on `NODEJS_HELPERS=0` being set on the
+   * deployment. That runtime otherwise decorates the request with a lazily-computed
+   * `request.body` that it parses itself according to Content-Type, which is the one
+   * thing this ordering exists to prevent. api/webhooks.ts fails closed rather than
+   * wrong if that happens - it rejects a body that is not a Buffer instead of
+   * verifying a re-serialised one, so no order can be marked PAID on an unverified
+   * delivery - but it fails closed for EVERY delivery, so the variable is not
+   * optional. See the deployment notes in README.
    */
   app.use(
     '/api/webhooks',
@@ -121,7 +130,8 @@ export function createApp(): Express {
   // Also /api: these hang off /api/orders/:id, and keeping them in their own file
   // keeps the money path readable without splitting the URL space.
   app.use('/api', paymentsRouter);
-  // Standard Checkout - POST /api/create-order and POST /api/verify-payment. A
+  // Standard Checkout - POST /api/create-order, POST /api/cancel-checkout and
+  // POST /api/verify-payment. A
   // separate file from paymentsRouter because it is a second payment METHOD rather
   // than more routes for the same one; they share the order row, the audit trail and
   // the single writer of PAID, and nothing else.
@@ -166,6 +176,7 @@ export function createApp(): Express {
         ],
         checkout: [
           'POST /api/create-order (Razorpay order for the checkout modal; requires { "approved": true })',
+          'POST /api/cancel-checkout (records a dismissed Standard Checkout modal as CANCELLED)',
           'POST /api/verify-payment',
         ],
         webhooks: ['POST /api/webhooks/razorpay'],
@@ -203,15 +214,42 @@ export function createApp(): Express {
 }
 
 /**
+ * The assembled app, as this module's default export.
+ *
+ * This is the shape Vercel's zero-configuration Express detection looks for. It scans
+ * a fixed list of entrypoints - `app`, `index` or `server`, at the project root or
+ * under `src/` - and wraps the default-exported app in a single Function. `src/server.ts`
+ * is already one of those names, so the deployment needs no adapter file beside this
+ * one, and therefore no second copy of the middleware order above that could drift out
+ * of step with it.
+ *
+ * Built here rather than inside `main()` because a default export has to be a value,
+ * and it costs nothing to do it at import: `createApp` only mounts routers, and every
+ * module it touches - `env`, which exits the process on a bad configuration, included -
+ * has already been evaluated by the imports at the top of this file. `main()` listens
+ * on this same instance, so `node dist/server.js` and a Vercel Function serve the
+ * identical app rather than two that were assembled the same way.
+ *
+ * `createApp` stays exported for callers that want an instance of their own, which is
+ * what scripts/smoke-http.mjs does.
+ */
+const app = createApp();
+
+export default app;
+
+/**
  * Start listening.
  *
  * Guarded by `import.meta.url` so importing this module for a test does not bind a
  * port. `env` was already validated at import time - the process has exited by now
  * if a required variable was missing.
+ *
+ * Not reached on Vercel, where the runtime imports the default export above and
+ * routes to it directly. Nothing in here is wanted there either: the readiness probe
+ * would run per cold start, and the signal handlers belong to a process that owns its
+ * own lifetime.
  */
 async function main(): Promise<void> {
-  const app = createApp();
-
   const server = app.listen(env.PORT, () => {
     console.log(`\n${SERVICE_NAME}`);
     console.log(`  listening   http://localhost:${env.PORT}`);

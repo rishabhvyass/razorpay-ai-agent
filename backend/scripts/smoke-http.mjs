@@ -276,6 +276,17 @@ console.log('\n=== 9. Payments layer with no Razorpay keys ===');
     check('does not echo a key value', !/rzp_(test|live)_/.test(r.text), r.text.slice(0, 200));
   }
 
+  const cancelled = await req('POST', '/api/cancel-checkout', {
+    body: {
+      orderId: someUuid,
+      reason: 'smoke test cancellation',
+    },
+  });
+  check('POST /api/cancel-checkout -> 501', cancelled.status === 501,
+    `got ${cancelled.status}`);
+  check('cancel-checkout code PAYMENT_NOT_CONFIGURED',
+    cancelled.json?.error?.code === 'PAYMENT_NOT_CONFIGURED', JSON.stringify(cancelled.json));
+
   // A webhook arriving at an unconfigured server must NOT be acknowledged. A 2xx
   // would tell Razorpay the delivery was handled and it would never be resent; 501
   // keeps it queued at the provider until keys are configured.

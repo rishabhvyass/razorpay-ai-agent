@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { AlertCircle, Info, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Badge, Button } from '@/components/ui';
 import { formatMinor } from '@/lib/money';
 import { ORDER_STATUS_PRESENTATION } from '@/components/orders/OrderStatus';
@@ -25,17 +25,15 @@ import type { Order } from '@/types';
  * is what the button now says and does. Re-authorising happens back in the
  * conversation, through the approval gate.
  *
- * On the missing Cancel action: spec section 22 lists a "Cancel order" button, but
- * the backend exposes no cancel route - POST /api/orders, GET /api/orders/:id,
- * GET /api/orders/:id/activity and GET /api/users/:userId/orders are the only order
- * endpoints that exist. A button that cannot cancel anything, or that only forgets
- * the order locally while the row stays open in the database, would be a fabricated
- * capability. So the state names the gap instead of faking the control.
+ * A customer closing Standard Checkout reaches this component through the backend's
+ * cancel-checkout response, so this screen is also the immediate recovery state for
+ * a dismissed modal rather than a stale PAYMENT_PENDING card.
  */
 export function PaymentFailure({
   order,
   reason,
   onRecheck,
+  onNewOrder,
   rechecking = false,
 }: {
   order: Order;
@@ -46,10 +44,13 @@ export function PaymentFailure({
    * change a settled outcome and it never re-submits a payment.
    */
   onRecheck?: () => void;
+  /** Sends a new-order request through the assistant when this card is in chat. */
+  onNewOrder?: () => void;
   /** True while that request is in flight, so the button is not silently inert. */
   rechecking?: boolean;
 }) {
   const presentation = ORDER_STATUS_PRESENTATION[order.status];
+  const cancelled = order.status === 'CANCELLED';
 
   return (
     <div className="space-y-5">
@@ -64,7 +65,9 @@ export function PaymentFailure({
       <div className="rounded-card bg-danger-bg animate-scale-in overflow-hidden">
         <div className="bg-danger flex items-center gap-2 px-5 py-2.5 text-white">
           <AlertCircle className="size-4 shrink-0" strokeWidth={2.5} aria-hidden />
-          <h3 className="text-[11px] font-bold tracking-[0.1em] uppercase">Payment not verified</h3>
+          <h3 className="text-[11px] font-bold tracking-[0.1em] uppercase">
+            {cancelled ? 'Payment cancelled' : 'Payment not verified'}
+          </h3>
         </div>
 
         <div className="p-5">
@@ -72,8 +75,10 @@ export function PaymentFailure({
             Nothing was charged
           </p>
           <p className="text-muted mt-2 text-[13px] leading-relaxed">
-            {formatMinor(order.amount, order.currency)} was not collected. Razorpay did not verify a
-            payment for this order, and no successful payment is recorded against it.{' '}
+            {formatMinor(order.amount, order.currency)} was not collected.{' '}
+            {cancelled
+              ? 'You closed the Razorpay checkout before this order was paid.'
+              : 'Razorpay did not verify a payment for this order.'}{' '}
             {reason ?? presentation.meaning}
           </p>
 
@@ -84,6 +89,23 @@ export function PaymentFailure({
       </div>
 
       <div className="flex flex-col gap-2.5 sm:flex-row">
+        {onNewOrder ? (
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={onNewOrder}
+            className="sm:flex-1"
+            fullWidth
+          >
+            Ask AI assistant for a new order
+          </Button>
+        ) : (
+          <Link to="/checkout" className="sm:flex-1">
+            <Button variant="primary" size="lg" fullWidth>
+              Ask AI assistant for a new order
+            </Button>
+          </Link>
+        )}
         {onRecheck ? (
           <Button
             variant="secondary"
@@ -103,23 +125,14 @@ export function PaymentFailure({
         </Link>
       </div>
 
-      <div className="rounded-control border-line bg-surface-sunken flex items-start gap-2.5 border px-4 py-3">
-        <Info className="text-muted mt-0.5 size-4 shrink-0" aria-hidden />
-        <p className="text-muted text-[12px] leading-relaxed">
-          There is no <strong className="text-ink font-bold">Cancel order</strong> action here
-          because the backend exposes no endpoint to cancel one. This order stays as{' '}
-          <code className="text-ink">{order.status}</code> in the database until a cancel route
-          exists. No button is shown that would only pretend to change it.
-        </p>
-      </div>
-
       <div className="flex items-center gap-2">
         <Badge tone="neutral">No retry was made automatically</Badge>
       </div>
       <p className="text-faint text-[11.5px] leading-relaxed">
         A failed payment is never retried on your behalf. Retrying is a money action, so it needs
         your authorisation like any other. This is why the only button here re-reads the status
-        rather than attempting a second payment. To buy this again, start a fresh authorisation.
+        rather than attempting a second payment. To buy this again, ask the AI assistant to create
+        a new order.
       </p>
     </div>
   );

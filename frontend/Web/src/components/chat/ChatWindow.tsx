@@ -188,6 +188,13 @@ export function ChatWindow() {
                 // Intent goes back through the agent, which replies with the
                 // authorisation card. Selecting a product never starts a purchase.
                 onSelectProduct={session.selectProduct}
+                onNewOrder={(product) =>
+                  session.send(
+                    product === null
+                      ? 'I want to buy the product again. Please create a new order.'
+                      : `I want to buy ${product.name} again. Please create a new order.`,
+                  )
+                }
                 busy={busy}
               />
             ))

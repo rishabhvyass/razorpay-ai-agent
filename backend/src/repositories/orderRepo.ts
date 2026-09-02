@@ -27,7 +27,7 @@ import { createHash } from 'node:crypto';
 
 import { supabaseAdmin } from '../db/supabase.js';
 import type { Json, OrderRow, OrderStatus, OrderUpdate } from '../db/types.js';
-import { badRequest, conflict, fromPostgrestError, internal } from '../utils/errors.js';
+import { badRequest, conflict, fromPostgrestError, internal, notFound } from '../utils/errors.js';
 import { formatMinorUnits, isValidMinorAmount, lineTotalMinor } from '../utils/money.js';
 import { getProductRowForOrder } from './productRepo.js';
 
@@ -60,7 +60,7 @@ const ORDER_COLUMNS =
  */
 const ALLOWED_TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   PENDING_CONFIRMATION: ['ORDER_CREATED', 'CANCELLED'],
-  ORDER_CREATED: ['PAYMENT_PENDING', 'PAID', 'PAYMENT_FAILED', 'CANCELLED'],
+  ORDER_CREATED: ['PAYMENT_PENDING', 'PAYMENT_FAILED', 'CANCELLED'],
   PAYMENT_PENDING: ['PAID', 'PAYMENT_FAILED', 'PAYMENT_EXPIRED', 'CANCELLED'],
   PAID: [],
   PAYMENT_FAILED: ['PAYMENT_PENDING', 'CANCELLED'],
@@ -207,23 +207,14 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Public
   const product = await getProductRowForOrder(input.productId);
 
   if (product === null) {
-    throw badRequest('PRODUCT_NOT_FOUND', 'That product does not exist.');
+    throw notFound('PRODUCT_NOT_FOUND', 'That product does not exist.');
   }
   if (!product.active) {
     throw conflict('CONFLICT', 'That product is no longer available for purchase.');
   }
-  if (product.stock < input.quantity) {
-    throw conflict('CONFLICT', `Only ${product.stock} left in stock.`, {
-      requested: input.quantity,
-      available: product.stock,
-    });
-  }
 
-  // `lineTotalMinor` range-checks the product itself, so this cannot silently
-  // overflow into the INTEGER column. A RangeError here means either an absurd
-  // quantity (a client fault) or a `products.price` the catalogue should never
-  // have contained (our fault); the two are separated so the caller gets a 400
-  // only for the one it can actually fix.
+  // Range-check quantity and product price first: absurd quantities fail as 400
+  // validation error before checking stock limits.
   let amount: number;
   try {
     amount = lineTotalMinor(product.price, input.quantity);
@@ -233,6 +224,13 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Public
     }
     throw badRequest('VALIDATION_ERROR', 'Order total is out of the supported range.', {
       quantity: input.quantity,
+    });
+  }
+
+  if (product.stock < input.quantity) {
+    throw conflict('CONFLICT', `Only ${product.stock} left in stock.`, {
+      requested: input.quantity,
+      available: product.stock,
     });
   }
 
